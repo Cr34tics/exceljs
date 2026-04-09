@@ -1,0 +1,223 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:best-practices",
+    "security:minimumReleaseAgeNpm"
+  ],
+  "dependencyDashboard": true,
+  "timezone": "Europe/Stockholm",
+  "packageRules": [
+    {
+      "description": [
+        "Group npm/yarn non-major updates"
+      ],
+      "matchManagers": [
+        "npm"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "npm non-major",
+      "groupSlug": "npm-non-major",
+      "addLabels": [
+        "dependencies",
+        "npm",
+        "yarn"
+      ]
+    },
+    {
+      "description": [
+        "Group npm/yarn major updates"
+      ],
+      "matchManagers": [
+        "npm"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "groupName": "npm major",
+      "groupSlug": "npm-major",
+      "dependencyDashboardApproval": true,
+      "addLabels": [
+        "dependencies",
+        "npm",
+        "yarn",
+        "major"
+      ]
+    },
+    {
+      "description": [
+        "Group Go non-major updates"
+      ],
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "go non-major",
+      "groupSlug": "go-non-major",
+      "addLabels": [
+        "dependencies",
+        "go"
+      ]
+    },
+    {
+      "description": [
+        "Group Go major updates"
+      ],
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "groupName": "go major",
+      "groupSlug": "go-major",
+      "dependencyDashboardApproval": true,
+      "addLabels": [
+        "dependencies",
+        "go",
+        "major"
+      ]
+    },
+    {
+      "description": [
+        "Group Python non-major updates"
+      ],
+      "matchCategories": [
+        "python"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "python non-major",
+      "groupSlug": "python-non-major",
+      "addLabels": [
+        "dependencies",
+        "python"
+      ]
+    },
+    {
+      "description": [
+        "Group Python major updates"
+      ],
+      "matchCategories": [
+        "python"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "groupName": "python major",
+      "groupSlug": "python-major",
+      "dependencyDashboardApproval": true,
+      "addLabels": [
+        "dependencies",
+        "python",
+        "major"
+      ]
+    },
+    {
+      "description": [
+        "Group Docker image non-major updates"
+      ],
+      "matchManagers": [
+        "dockerfile",
+        "docker-compose"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest"
+      ],
+      "groupName": "docker non-major",
+      "groupSlug": "docker-non-major",
+      "addLabels": [
+        "dependencies",
+        "docker"
+      ]
+    },
+    {
+      "description": [
+        "Group Docker major updates"
+      ],
+      "matchManagers": [
+        "dockerfile",
+        "docker-compose"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "groupName": "docker major",
+      "groupSlug": "docker-major",
+      "dependencyDashboardApproval": true,
+      "addLabels": [
+        "dependencies",
+        "docker",
+        "major"
+      ]
+    },
+    {
+      "description": [
+        "Group GitHub Actions non-major updates"
+      ],
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest"
+      ],
+      "groupName": "github-actions non-major",
+      "groupSlug": "github-actions-non-major",
+      "addLabels": [
+        "dependencies",
+        "github-actions"
+      ]
+    },
+    {
+      "description": [
+        "Group GitHub Actions major updates"
+      ],
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "groupName": "github-actions major",
+      "groupSlug": "github-actions-major",
+      "dependencyDashboardApproval": true,
+      "addLabels": [
+        "dependencies",
+        "github-actions",
+        "major"
+      ]
+    },
+    {
+      "description": [
+        "Extra npm age gate"
+      ],
+      "matchDatasources": [
+        "npm"
+      ],
+      "minimumReleaseAge": "7 days"
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "labels": [
+      "dependencies",
+      "security"
+    ],
+    "automerge": true,
+    "ignoreTests": true,
+    "addLabels": [
+      "automerge"
+    ],
+    "assignees": []
+  }
+}
