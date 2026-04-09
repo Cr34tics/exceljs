@@ -6,6 +6,7 @@
   ],
   "dependencyDashboard": true,
   "timezone": "Europe/Stockholm",
+  "forkProcessing": "enabled",
   "packageRules": [
     {
       "description": [
