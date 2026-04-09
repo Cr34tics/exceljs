@@ -214,7 +214,6 @@
       "security"
     ],
     "automerge": true,
-    "ignoreTests": true,
     "addLabels": [
       "automerge"
     ],
