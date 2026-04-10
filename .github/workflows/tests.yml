@@ -24,15 +24,15 @@ jobs:
           git config --global core.autocrlf false
           git config --global core.symlinks true
         if: runner.os == 'Windows'
-      - uses: actions/checkout@v6 #latest v4. TODO upgrade
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6 #latest v4. TODO upgrade
       - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v6 #latest  v3. TODO upgrade
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6 #latest  v3. TODO upgrade
         with:
           node-version: ${{ matrix.node-version }}
       - name: Create the npm cache directory
         run: mkdir npm-cache && npm config set cache ./npm-cache --global
       - name: Cache node modules
-        uses: actions/cache@v5 #latest v3 TODO upgrade
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5 #latest v3 TODO upgrade
         with:
           path: ./npm-cache
           key: v1-${{ runner.os }}-node-${{ matrix.node-version }}-npm-${{ hashFiles('**/package.json') }}
@@ -49,14 +49,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6 #latest v4. TODO upgrade
-      - uses: actions/setup-node@v6 #latest  v3. TODO upgrade
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6 #latest v4. TODO upgrade
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6 #latest  v3. TODO upgrade
         with:
           node-version: 24
       - name: Create the npm cache directory
         run: mkdir npm-cache && npm config set cache ./npm-cache --global
       - name: Cache node modules
-        uses: actions/cache@v5 #latest v3 TODO upgrade
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5 #latest v3 TODO upgrade
         with:
           path: ./npm-cache
           key: v1-npm-${{ hashFiles('**/package.json') }}
@@ -73,14 +73,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6 #latest v4. TODO upgrade
-      - uses: actions/setup-node@v6 #latest  v3. TODO upgrade
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6 #latest v4. TODO upgrade
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6 #latest  v3. TODO upgrade
         with:
           node-version: 24
       - name: Create the npm cache directory
         run: mkdir npm-cache && npm config set cache ./npm-cache --global
       - name: Cache node modules
-        uses: actions/cache@v5 #latest v3 TODO upgrade
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5 #latest v3 TODO upgrade
         with:
           path: ./npm-cache
           key: v1-npm-${{ hashFiles('**/package.json') }}
