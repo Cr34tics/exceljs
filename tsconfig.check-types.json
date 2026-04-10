@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "es2020",
+    "noEmit": true,
+    "types": [
+      "node"
+    ]
+  },
+  "files": [
+    "index.d.ts"
+  ]
+}
