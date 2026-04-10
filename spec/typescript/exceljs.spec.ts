@@ -28,7 +28,7 @@ describe('typescript', () => {
     await wb.xlsx.write(stream);
     stream.end();
 
-    await new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       stream.on('done', () => {
         const ws2 = wb2.getWorksheet('blort');
         expect(ws2.getCell('A1').value).to.equal(7);

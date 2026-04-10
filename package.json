@@ -102,7 +102,6 @@
     "jszip": "^3.10.1",
     "readable-stream": "^3.6.0",
     "saxes": "^5.0.1",
-    "tmp": "^0.2.0",
     "unzipper": "^0.10.11",
     "uuid": "^8.3.0"
   },
@@ -112,7 +111,7 @@
     "@babel/preset-env": "7.29.2",
     "@types/chai": "4.3.20",
     "@types/mocha": "8.2.3",
-    "@types/node": "14.18.63",
+    "@types/node": "20.19.39",
     "babelify": "10.0.0",
     "browserify": "16.5.2",
     "chai": "4.5.0",
@@ -132,7 +131,7 @@
     "grunt-babel": "8.0.0",
     "grunt-browserify": "5.3.0",
     "grunt-contrib-copy": "1.0.0",
-    "grunt-contrib-jasmine": "2.2.0",
+    "grunt-contrib-jasmine": "4.0.0",
     "grunt-contrib-watch": "1.1.0",
     "grunt-exorcise": "2.1.1",
     "grunt-terser": "1.0.0",
@@ -144,6 +143,6 @@
     "regenerator-runtime": "0.13.11",
     "sax": "1.6.0",
     "ts-node": "8.10.2",
-    "typescript": "3.9.10"
+    "typescript": "6.0.2"
   }
 }
