@@ -16,4 +16,4 @@ jobs:
           repo-token: "${{ secrets.GITHUB_TOKEN }}"
           files: '["dist/*.js"]'
           with-same: "false"
-          build-assets: "(npm ci 2>/dev/null || npm install) && grunt build"
+          build-assets: "bash -c '(npm ci 2>/dev/null || npm install) && grunt build'"
