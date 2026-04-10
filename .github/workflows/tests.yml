@@ -39,7 +39,20 @@ jobs:
           restore-keys: |
             v1-${{ runner.os }}-node-${{ matrix.node-version }}-npm-
       - run: npm install
-      - run: npm test
+      - run: npm run build
+        env:
+          CI: true
+      - run: npm run test:unit
+        env:
+          CI: true
+      - run: npm run test:integration
+        env:
+          CI: true
+      - run: npm run test:end-to-end
+        env:
+          CI: true
+      - run: npm run test:jasmine
+        if: runner.os == 'Linux'
         env:
           CI: true
 
