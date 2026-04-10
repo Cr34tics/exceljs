@@ -35,10 +35,10 @@ jobs:
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5 #latest v3 TODO upgrade
         with:
           path: ./npm-cache
-          key: v1-${{ runner.os }}-node-${{ matrix.node-version }}-npm-${{ hashFiles('**/package.json') }}
+          key: v1-${{ runner.os }}-node-${{ matrix.node-version }}-npm-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
             v1-${{ runner.os }}-node-${{ matrix.node-version }}-npm-
-      - run: npm install
+      - run: npm ci
         env:
           PUPPETEER_SKIP_DOWNLOAD: 'true'
       - run: npm run build
@@ -112,10 +112,10 @@ jobs:
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5 #latest v3 TODO upgrade
         with:
           path: ./npm-cache
-          key: v1-npm-${{ hashFiles('**/package.json') }}
+          key: v1-npm-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
             v1-npm-
-      - run: npm install
+      - run: npm ci
       - run: npm run benchmark
         env:
           CI: true
@@ -136,10 +136,10 @@ jobs:
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5 #latest v3 TODO upgrade
         with:
           path: ./npm-cache
-          key: v1-npm-${{ hashFiles('**/package.json') }}
+          key: v1-npm-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
             v1-npm-
-      - run: npm install
+      - run: npm ci
       - run: tsc --noEmit -p tsconfig.check-types.json
         env:
           CI: true
