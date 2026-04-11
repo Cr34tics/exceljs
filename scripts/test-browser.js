@@ -177,6 +177,7 @@ async function runTests() {
         const decoder = new TextDecoder();
         return decoder.decode(buffer);
       });
+      // CSV standard: values containing commas are quoted, others are not
       const expected = '"Hello, World!",What time is it?\n7,12pm';
       const ok = csvContent === expected;
       report('should write csv via buffer', ok,
