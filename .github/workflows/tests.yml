@@ -39,8 +39,6 @@ jobs:
           restore-keys: |
             v1-${{ runner.os }}-node-${{ matrix.node-version }}-npm-
       - run: npm ci
-        env:
-          PUPPETEER_SKIP_DOWNLOAD: 'true'
       - run: npm run build
         env:
           CI: true
@@ -53,48 +51,9 @@ jobs:
       - run: npm run test:end-to-end
         env:
           CI: true
-      - name: Detect Chrome path
-        id: chrome
-        shell: bash
-        run: |
-          chrome_path=''
-
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            for candidate in google-chrome google-chrome-stable chromium-browser chromium; do
-              if command -v "$candidate" >/dev/null 2>&1; then
-                chrome_path="$(command -v "$candidate")"
-                break
-              fi
-            done
-          elif [ "$RUNNER_OS" = "macOS" ]; then
-            for candidate in \
-              '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' \
-              "$HOME/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
-              '/Applications/Chromium.app/Contents/MacOS/Chromium'
-            do
-              if [ -x "$candidate" ]; then
-                chrome_path="$candidate"
-                break
-              fi
-            done
-          elif [ "$RUNNER_OS" = "Windows" ]; then
-            for candidate in \
-              'C:/Program Files/Google/Chrome/Application/chrome.exe' \
-              'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe' \
-              "$LOCALAPPDATA/Google/Chrome/Application/chrome.exe"
-            do
-              if [ -f "$candidate" ]; then
-                chrome_path="$candidate"
-                break
-              fi
-            done
-          fi
-
-          echo "path=$chrome_path" >> "$GITHUB_OUTPUT"
-      - run: npm run test:jasmine
+      - run: npm run test:browser:run
         env:
           CI: true
-          PUPPETEER_EXECUTABLE_PATH: ${{ steps.chrome.outputs.path }}
 
   benchmark:
     timeout-minutes: 15
