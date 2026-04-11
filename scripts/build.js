@@ -16,8 +16,8 @@ const yyyy = today.getFullYear();
 const banner = `/*! ExcelJS ${dd}-${mm}-${yyyy} */`;
 
 // Node built-in modules that need to be shimmed for browser builds.
-// 'fs' and 'crypto' are only used in Node-specific code paths, so they can be stubbed as empty.
-// 'stream' and 'events' are actively used and need real polyfills.
+// 'stream', 'events', 'buffer', 'crypto', and 'process' get real browser-compatible polyfills.
+// All other Node builtins (e.g., 'fs') are stubbed as empty modules.
 
 // Create a plugin to handle Node builtins for browser builds
 const nodeBrowserPlugin = {
@@ -26,7 +26,7 @@ const nodeBrowserPlugin = {
     const emptyPath = path.join(__dirname, 'empty-module.js');
 
     // Modules that need real browser-compatible polyfills
-    const polyfilled = new Set(['stream', 'events', 'buffer']);
+    const polyfilled = new Set(['stream', 'events', 'buffer', 'crypto', 'process']);
 
     // 'stream' polyfill via stream-browserify
     build.onResolve({filter: /^stream$/}, () => ({
@@ -41,6 +41,16 @@ const nodeBrowserPlugin = {
     // 'buffer' polyfill via the buffer npm package
     build.onResolve({filter: /^buffer$/}, () => ({
       path: require.resolve('buffer/'),
+    }));
+
+    // 'crypto' shim providing randomBytes via Web Crypto API
+    build.onResolve({filter: /^crypto$/}, () => ({
+      path: path.join(__dirname, 'shims', 'crypto-shim.js'),
+    }));
+
+    // 'process' shim for require('process') used by readable-stream and others
+    build.onResolve({filter: /^process$/}, () => ({
+      path: path.join(__dirname, 'shims', 'process-shim.js'),
     }));
 
     // All other Node builtins get stubbed as empty modules

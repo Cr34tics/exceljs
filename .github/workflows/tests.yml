@@ -51,9 +51,12 @@ jobs:
       - run: npm run test:end-to-end
         env:
           CI: true
+      - run: npx playwright install chromium
+        if: runner.os == 'Linux'
       - run: npm run test:browser:run
         env:
           CI: true
+        if: runner.os == 'Linux'
 
   benchmark:
     timeout-minutes: 15
