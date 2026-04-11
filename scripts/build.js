@@ -35,12 +35,12 @@ const nodeBrowserPlugin = {
 
     // 'events' polyfill via the events npm package
     build.onResolve({filter: /^events$/}, () => ({
-      path: path.resolve(__dirname, '..', 'node_modules', 'events', 'events.js'),
+      path: require.resolve('events/'),
     }));
 
     // 'buffer' polyfill via the buffer npm package
     build.onResolve({filter: /^buffer$/}, () => ({
-      path: path.resolve(__dirname, '..', 'node_modules', 'buffer', 'index.js'),
+      path: require.resolve('buffer/'),
     }));
 
     // All other Node builtins get stubbed as empty modules
@@ -67,6 +67,11 @@ const browserBuildOptions = {
   footer: {js: 'if(typeof module!=="undefined")module.exports=ExcelJS;'},
   target: ['es2015'],
   plugins: [nodeBrowserPlugin],
+  // Inject process and Buffer shims so they are available as globals in the browser bundle
+  inject: [
+    path.join(__dirname, 'shims', 'process-shim.js'),
+    path.join(__dirname, 'shims', 'buffer-shim.js'),
+  ],
   define: {
     'process.env.NODE_ENV': '"production"',
   },
@@ -123,7 +128,7 @@ async function build() {
     platform: 'node',
     format: 'cjs',
     sourcemap: true,
-    target: ['node10'],
+    target: ['node20'],
   });
 
   // Copy the nodejs entry as index.js
