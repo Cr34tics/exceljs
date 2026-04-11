@@ -1,0 +1,257 @@
+'use strict';
+
+/* global window */
+// Browser-bundle tests using Playwright: validates that the built dist/exceljs.js
+// bundle works correctly in a real headless browser environment.
+// This replaces the former grunt-contrib-jasmine browser tests and the Node VM-based
+// smoke tests, providing genuine browser coverage.
+
+const {chromium} = require('@playwright/test');
+const fs = require('fs');
+const path = require('path');
+const http = require('http');
+
+const bundlePath = path.resolve(__dirname, '..', 'dist', 'exceljs.js');
+const minBundlePath = path.resolve(__dirname, '..', 'dist', 'exceljs.min.js');
+const bareBundlePath = path.resolve(__dirname, '..', 'dist', 'exceljs.bare.js');
+
+// Serve a minimal HTML page that loads the ExcelJS bundle
+function createServer() {
+  return new Promise((resolve, reject) => {
+    const server = http.createServer((req, res) => {
+      if (req.url === '/' || req.url === '/index.html') {
+        res.writeHead(200, {'Content-Type': 'text/html'});
+        res.end(`<!DOCTYPE html>
+<html><head><title>ExcelJS Browser Test</title></head>
+<body><script src="/exceljs.js"></script></body></html>`);
+      } else if (req.url === '/exceljs.js') {
+        const stream = fs.createReadStream(bundlePath);
+        stream.on('error', err => {
+          if (!res.headersSent) {
+            res.writeHead(500, {'Content-Type': 'text/plain'});
+          }
+          res.end(`Error reading bundle: ${err.message}`);
+        });
+        stream.on('open', () => {
+          res.writeHead(200, {'Content-Type': 'application/javascript'});
+          stream.pipe(res);
+        });
+      } else {
+        res.writeHead(404);
+        res.end('Not found');
+      }
+    });
+    server.listen(0, '127.0.0.1', () => {
+      resolve(server);
+    });
+    server.on('error', reject);
+  });
+}
+
+async function runTests() {
+  let passed = 0;
+  let failed = 0;
+
+  function report(name, ok, err) {
+    if (ok) {
+      console.log(`  ✔ ${name}`);
+      passed++;
+    } else {
+      console.error(`  ✘ ${name}`);
+      if (err) console.error(`    ${err}`);
+      failed++;
+    }
+  }
+
+  console.log('Browser bundle tests:');
+
+  // Static file existence checks — abort early if the main bundle is missing
+  const bundleExists = fs.existsSync(bundlePath);
+  report('dist/exceljs.js should exist', bundleExists);
+  report('dist/exceljs.min.js should exist', fs.existsSync(minBundlePath));
+  report('dist/exceljs.bare.js should exist', fs.existsSync(bareBundlePath));
+
+  if (!bundleExists) {
+    console.error('\nCannot run browser tests: dist/exceljs.js is missing. Run "npm run build" first.');
+    process.exit(1);
+  }
+
+  // Launch browser and run actual ExcelJS operations
+  let server;
+  let browser;
+  try {
+    server = await createServer();
+    const {port} = server.address();
+    browser = await chromium.launch();
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    // Collect console errors from the browser
+    const consoleErrors = [];
+    page.on('console', msg => {
+      if (msg.type() === 'error') consoleErrors.push(msg.text());
+    });
+    page.on('pageerror', err => consoleErrors.push(err.message));
+
+    await page.goto(`http://127.0.0.1:${port}/`);
+
+    // Test: bundle loads without errors and defines ExcelJS global
+    try {
+      const hasExcelJS = await page.evaluate(() => typeof window.ExcelJS === 'object' && window.ExcelJS !== null);
+      report('bundle should define ExcelJS global', hasExcelJS, !hasExcelJS && 'ExcelJS is not defined');
+    } catch (err) {
+      report('bundle should define ExcelJS global', false, err.message);
+    }
+
+    // Test: ExcelJS.Workbook is a constructor
+    try {
+      const hasWorkbook = await page.evaluate(() => typeof window.ExcelJS.Workbook === 'function');
+      report('ExcelJS.Workbook should be a constructor', hasWorkbook);
+    } catch (err) {
+      report('ExcelJS.Workbook should be a constructor', false, err.message);
+    }
+
+    // Test: ExcelJS exposes ValueType and FormulaType enums
+    try {
+      const hasEnums = await page.evaluate(() =>
+        window.ExcelJS.ValueType !== undefined && window.ExcelJS.FormulaType !== undefined
+      );
+      report('bundle should expose ValueType and FormulaType enums', hasEnums);
+    } catch (err) {
+      report('bundle should expose ValueType and FormulaType enums', false, err.message);
+    }
+
+    // Test: read and write xlsx via binary buffer
+    try {
+      const result = await page.evaluate(async () => {
+        const wb = new window.ExcelJS.Workbook();
+        const ws = wb.addWorksheet('blort');
+        ws.getCell('A1').value = 'Hello, World!';
+        ws.getCell('A2').value = 7;
+
+        const buffer = await wb.xlsx.writeBuffer();
+        const wb2 = new window.ExcelJS.Workbook();
+        await wb2.xlsx.load(buffer);
+        const ws2 = wb2.getWorksheet('blort');
+
+        return {
+          a1: ws2.getCell('A1').value,
+          a2: ws2.getCell('A2').value,
+        };
+      });
+      const ok = result.a1 === 'Hello, World!' && result.a2 === 7;
+      report('should read and write xlsx via binary buffer', ok,
+        !ok && `A1=${result.a1}, A2=${result.a2}`);
+    } catch (err) {
+      report('should read and write xlsx via binary buffer', false, err.message);
+    }
+
+    // Test: read and write xlsx via base64 buffer
+    try {
+      const result = await page.evaluate(async () => {
+        const wb = new window.ExcelJS.Workbook();
+        const ws = wb.addWorksheet('blort');
+        ws.getCell('A1').value = 'Hello, World!';
+        ws.getCell('A2').value = 7;
+
+        // Write without base64 option, then manually convert to base64
+        const buffer = await wb.xlsx.writeBuffer();
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.byteLength; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        const base64String = btoa(binary);
+
+        const wb2 = new window.ExcelJS.Workbook();
+        await wb2.xlsx.load(base64String, {base64: true});
+        const ws2 = wb2.getWorksheet('blort');
+
+        return {
+          a1: ws2.getCell('A1').value,
+          a2: ws2.getCell('A2').value,
+        };
+      });
+      const ok = result.a1 === 'Hello, World!' && result.a2 === 7;
+      report('should read and write xlsx via base64 buffer', ok,
+        !ok && `A1=${result.a1}, A2=${result.a2}`);
+    } catch (err) {
+      report('should read and write xlsx via base64 buffer', false, err.message);
+    }
+
+    // Test: write csv via buffer
+    try {
+      const csvContent = await page.evaluate(async () => {
+        const wb = new window.ExcelJS.Workbook();
+        const ws = wb.addWorksheet('blort');
+        ws.getCell('A1').value = 'Hello, World!';
+        ws.getCell('B1').value = 'What time is it?';
+        ws.getCell('A2').value = 7;
+        ws.getCell('B2').value = '12pm';
+
+        const buffer = await wb.csv.writeBuffer();
+        // Convert buffer to string
+        const decoder = new TextDecoder();
+        return decoder.decode(buffer);
+      });
+      // CSV standard: values containing commas are quoted, others are not
+      const expected = '"Hello, World!",What time is it?\n7,12pm';
+      const ok = csvContent === expected;
+      report('should write csv via buffer', ok,
+        !ok && `Expected: ${JSON.stringify(expected)}, Got: ${JSON.stringify(csvContent)}`);
+    } catch (err) {
+      report('should write csv via buffer', false, err.message);
+    }
+
+    // Test: worksheet protection with password hashing (exercises crypto.createHash in browser)
+    try {
+      const result = await page.evaluate(async () => {
+        const wb = new window.ExcelJS.Workbook();
+        const ws = wb.addWorksheet('protected');
+        ws.getCell('A1').value = 'Protected content';
+        await ws.protect('testPassword', {});
+
+        const buffer = await wb.xlsx.writeBuffer();
+        const wb2 = new window.ExcelJS.Workbook();
+        await wb2.xlsx.load(buffer);
+        const ws2 = wb2.getWorksheet('protected');
+
+        return {
+          hasProtection: ws2.sheetProtection !== undefined && ws2.sheetProtection !== null,
+          a1: ws2.getCell('A1').value,
+        };
+      });
+      const ok = result.hasProtection && result.a1 === 'Protected content';
+      report('should support worksheet protection with password hashing', ok,
+        !ok && `hasProtection=${result.hasProtection}, A1=${result.a1}`);
+    } catch (err) {
+      report('should support worksheet protection with password hashing', false, err.message);
+    }
+
+    // Report any unexpected console errors
+    if (consoleErrors.length > 0) {
+      console.warn(`\n  ⚠ Browser console errors:\n    ${consoleErrors.join('\n    ')}`);
+    }
+  } finally {
+    if (browser) await browser.close();
+    if (server) {
+      await new Promise((resolve, reject) => {
+        server.close(err => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+    }
+  }
+
+  console.log(`\n${passed + failed} tests: ${passed} passing, ${failed} failing`);
+
+  if (failed > 0) {
+    process.exit(1);
+  }
+}
+
+runTests().catch(err => {
+  console.error('Test runner error:', err);
+  process.exit(1);
+});
