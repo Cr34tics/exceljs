@@ -12,7 +12,7 @@ const compat = new FlatCompat({
 module.exports = [
   // Ignores (replaces .eslintignore)
   {
-    ignores: ['build/**', 'dist/**', 'out/**', 'spec/manual/public/**'],
+    ignores: ['build/**', 'dist/**', 'out/**', 'spec/manual/public/**', 'scripts/**'],
   },
 
   // Airbnb base via FlatCompat (legacy config bridge)
