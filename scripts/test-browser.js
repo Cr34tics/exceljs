@@ -24,8 +24,17 @@ function createServer() {
 <html><head><title>ExcelJS Browser Test</title></head>
 <body><script src="/exceljs.js"></script></body></html>`);
       } else if (req.url === '/exceljs.js') {
-        res.writeHead(200, {'Content-Type': 'application/javascript'});
-        fs.createReadStream(bundlePath).pipe(res);
+        const stream = fs.createReadStream(bundlePath);
+        stream.on('error', err => {
+          if (!res.headersSent) {
+            res.writeHead(500, {'Content-Type': 'text/plain'});
+          }
+          res.end(`Error reading bundle: ${err.message}`);
+        });
+        stream.on('open', () => {
+          res.writeHead(200, {'Content-Type': 'application/javascript'});
+          stream.pipe(res);
+        });
       } else {
         res.writeHead(404);
         res.end('Not found');
@@ -55,10 +64,16 @@ async function runTests() {
 
   console.log('Browser bundle tests:');
 
-  // Static file existence checks
-  report('dist/exceljs.js should exist', fs.existsSync(bundlePath));
+  // Static file existence checks — abort early if the main bundle is missing
+  const bundleExists = fs.existsSync(bundlePath);
+  report('dist/exceljs.js should exist', bundleExists);
   report('dist/exceljs.min.js should exist', fs.existsSync(minBundlePath));
   report('dist/exceljs.bare.js should exist', fs.existsSync(bareBundlePath));
+
+  if (!bundleExists) {
+    console.error('\nCannot run browser tests: dist/exceljs.js is missing. Run "npm run build" first.');
+    process.exit(1);
+  }
 
   // Launch browser and run actual ExcelJS operations
   const server = await createServer();
