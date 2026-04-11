@@ -17,6 +17,7 @@ function parseXml(xmlStr) {
 
   parser.onerror = function(e) {
     error = e;
+    parser.resume();
   };
 
   parser.onopentag = function(node) {
@@ -65,7 +66,11 @@ function parseXml(xmlStr) {
     }
   };
 
-  parser.write(xmlStr).close();
+  try {
+    parser.write(xmlStr).close();
+  } catch (e) {
+    if (!error) error = e;
+  }
 
   return {root, error};
 }

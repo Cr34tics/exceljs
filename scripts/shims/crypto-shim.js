@@ -2,6 +2,7 @@
 // Provides randomBytes() via Web Crypto API, and createHash/createHmac
 // via the create-hash/create-hmac packages (pure-JS browser implementations).
 
+import {Buffer} from 'buffer';
 import _createHash from 'create-hash';
 import _createHmac from 'create-hmac';
 

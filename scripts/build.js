@@ -30,6 +30,7 @@ const nodeBrowserPlugin = {
 
     const polyfilledResolvers = {
       stream: () => require.resolve('stream-browserify'),
+      // Trailing slash forces resolution to the npm package, not the Node built-in
       events: () => require.resolve('events/'),
       buffer: () => require.resolve('buffer/'),
       crypto: () => path.join(__dirname, 'shims', 'crypto-shim.js'),

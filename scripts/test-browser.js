@@ -148,22 +148,22 @@ async function runTests() {
     // Test: read and write xlsx via base64 buffer
     try {
       const result = await page.evaluate(async () => {
-        const options = {base64: true};
         const wb = new window.ExcelJS.Workbook();
         const ws = wb.addWorksheet('blort');
         ws.getCell('A1').value = 'Hello, World!';
         ws.getCell('A2').value = 7;
 
-        const buffer = await wb.xlsx.writeBuffer(options);
-        const wb2 = new window.ExcelJS.Workbook();
-        // Convert ArrayBuffer to base64 string for load
+        // Write without base64 option, then manually convert to base64
+        const buffer = await wb.xlsx.writeBuffer();
         const bytes = new Uint8Array(buffer);
         let binary = '';
         for (let i = 0; i < bytes.byteLength; i++) {
           binary += String.fromCharCode(bytes[i]);
         }
         const base64String = btoa(binary);
-        await wb2.xlsx.load(base64String, options);
+
+        const wb2 = new window.ExcelJS.Workbook();
+        await wb2.xlsx.load(base64String, {base64: true});
         const ws2 = wb2.getWorksheet('blort');
 
         return {
@@ -208,7 +208,7 @@ async function runTests() {
         const wb = new window.ExcelJS.Workbook();
         const ws = wb.addWorksheet('protected');
         ws.getCell('A1').value = 'Protected content';
-        ws.protect('testPassword', {});
+        await ws.protect('testPassword', {});
 
         const buffer = await wb.xlsx.writeBuffer();
         const wb2 = new window.ExcelJS.Workbook();
