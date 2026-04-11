@@ -76,11 +76,12 @@ async function runTests() {
   }
 
   // Launch browser and run actual ExcelJS operations
-  const server = await createServer();
-  const port = server.address().port;
-  const browser = await chromium.launch();
-
+  let server;
+  let browser;
   try {
+    server = await createServer();
+    const port = server.address().port;
+    browser = await chromium.launch();
     const context = await browser.newContext();
     const page = await context.newPage();
 
@@ -206,8 +207,8 @@ async function runTests() {
       console.warn(`\n  ⚠ Browser console errors:\n    ${consoleErrors.join('\n    ')}`);
     }
   } finally {
-    await browser.close();
-    server.close();
+    if (browser) await browser.close();
+    if (server) server.close();
   }
 
   console.log(`\n${passed + failed} tests: ${passed} passing, ${failed} failing`);

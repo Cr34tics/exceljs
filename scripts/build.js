@@ -85,35 +85,37 @@ async function build() {
     fs.writeFileSync(emptyModulePath, 'module.exports = {};\n');
   }
 
+  const repoRoot = path.resolve(__dirname, '..');
+
   // 1. Bundle lib/exceljs.browser.js -> dist/exceljs.js (with source map)
   await esbuild.build({
     ...browserBuildOptions,
-    entryPoints: ['lib/exceljs.browser.js'],
-    outfile: 'dist/exceljs.js',
+    entryPoints: [path.join(repoRoot, 'lib', 'exceljs.browser.js')],
+    outfile: path.join(distDir, 'exceljs.js'),
     sourcemap: true,
   });
 
   // 2. Bundle lib/exceljs.bare.js -> dist/exceljs.bare.js (with source map)
   await esbuild.build({
     ...browserBuildOptions,
-    entryPoints: ['lib/exceljs.bare.js'],
-    outfile: 'dist/exceljs.bare.js',
+    entryPoints: [path.join(repoRoot, 'lib', 'exceljs.bare.js')],
+    outfile: path.join(distDir, 'exceljs.bare.js'),
     sourcemap: true,
   });
 
   // 3. Minified versions
   await esbuild.build({
     ...browserBuildOptions,
-    entryPoints: ['lib/exceljs.browser.js'],
-    outfile: 'dist/exceljs.min.js',
+    entryPoints: [path.join(repoRoot, 'lib', 'exceljs.browser.js')],
+    outfile: path.join(distDir, 'exceljs.min.js'),
     sourcemap: true,
     minify: true,
   });
 
   await esbuild.build({
     ...browserBuildOptions,
-    entryPoints: ['lib/exceljs.bare.js'],
-    outfile: 'dist/exceljs.bare.min.js',
+    entryPoints: [path.join(repoRoot, 'lib', 'exceljs.bare.js')],
+    outfile: path.join(distDir, 'exceljs.bare.min.js'),
     sourcemap: true,
     minify: true,
   });
@@ -144,20 +146,6 @@ async function build() {
   const licenseDest = path.join(distDir, 'LICENSE');
   if (fs.existsSync(licenseSrc)) {
     fs.copyFileSync(licenseSrc, licenseDest);
-  }
-
-  // 5. Build browser spec for testing
-  const specEntry = path.resolve(__dirname, '..', 'spec', 'browser', 'exceljs.spec.js');
-  if (fs.existsSync(specEntry)) {
-    const webDir = path.resolve(__dirname, '..', 'build', 'web');
-    fs.mkdirSync(webDir, {recursive: true});
-    await esbuild.build({
-      entryPoints: [specEntry],
-      bundle: false,
-      outfile: path.join(webDir, 'exceljs.spec.js'),
-      platform: 'browser',
-      target: ['es2015'],
-    });
   }
 
   console.log('Build complete.');

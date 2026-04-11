@@ -49,4 +49,11 @@ export function createHmac(algorithm) {
   );
 }
 
-export default {randomBytes, createHash, createHmac};
+export function getHashes() {
+  throw new Error(
+    'crypto.getHashes() is not supported in browser builds. ' +
+      'Features requiring hash enumeration need Node.js or a browser-compatible crypto polyfill.'
+  );
+}
+
+export default {randomBytes, createHash, createHmac, getHashes};
