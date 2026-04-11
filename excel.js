@@ -6,7 +6,7 @@
 
 if (parseInt(process.versions.node.split('.')[0], 10) < 20) {
   throw new Error(
-    'ExcelJS requires Node.js 20 or later. For older Node versions, please use the CJS import: https://github.com/exceljs/exceljs#cjs-imports'
+    'ExcelJS requires Node.js 20 or later. Please upgrade Node.js or use an older ExcelJS release that supports your Node version.'
   );
 }
 

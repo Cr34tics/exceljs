@@ -25,42 +25,33 @@ const nodeBrowserPlugin = {
   setup(build) {
     const emptyPath = path.join(__dirname, 'empty-module.js');
 
-    // Modules that need real browser-compatible polyfills
+    // Modules that need real browser-compatible polyfills (both bare and node:-prefixed)
     const polyfilled = new Set(['stream', 'events', 'buffer', 'crypto', 'process']);
 
-    // 'stream' polyfill via stream-browserify
-    build.onResolve({filter: /^stream$/}, () => ({
-      path: require.resolve('stream-browserify'),
-    }));
+    const polyfilledResolvers = {
+      stream: () => require.resolve('stream-browserify'),
+      events: () => require.resolve('events/'),
+      buffer: () => require.resolve('buffer/'),
+      crypto: () => path.join(__dirname, 'shims', 'crypto-shim.js'),
+      process: () => path.join(__dirname, 'shims', 'process-shim.js'),
+    };
 
-    // 'events' polyfill via the events npm package
-    build.onResolve({filter: /^events$/}, () => ({
-      path: require.resolve('events/'),
-    }));
-
-    // 'buffer' polyfill via the buffer npm package
-    build.onResolve({filter: /^buffer$/}, () => ({
-      path: require.resolve('buffer/'),
-    }));
-
-    // 'crypto' shim providing randomBytes via Web Crypto API
-    build.onResolve({filter: /^crypto$/}, () => ({
-      path: path.join(__dirname, 'shims', 'crypto-shim.js'),
-    }));
-
-    // 'process' shim for require('process') used by readable-stream and others
-    build.onResolve({filter: /^process$/}, () => ({
-      path: path.join(__dirname, 'shims', 'process-shim.js'),
-    }));
+    // Register resolvers for both bare and node:-prefixed imports
+    for (const [mod, resolver] of Object.entries(polyfilledResolvers)) {
+      const escaped = mod.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      build.onResolve({filter: new RegExp(`^(node:)?${escaped}$`)}, () => ({
+        path: resolver(),
+      }));
+    }
 
     // All other Node builtins get stubbed as empty modules
     const builtins = require('module').builtinModules
-      .filter(m => !m.startsWith('_') && !polyfilled.has(m));
+      .filter(m => !m.startsWith('_') && !m.startsWith('node:') && !polyfilled.has(m));
 
     for (const mod of builtins) {
-      // Escape special regex chars in module names (e.g. node:fs)
+      // Handle both bare and node:-prefixed imports
       const escaped = mod.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      build.onResolve({filter: new RegExp(`^${escaped}$`)}, () => ({
+      build.onResolve({filter: new RegExp(`^(node:)?${escaped}$`)}, () => ({
         path: emptyPath,
       }));
     }
