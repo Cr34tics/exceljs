@@ -1,5 +1,5 @@
 const http = require('http');
-const {PassThrough} = require('readable-stream');
+const {PassThrough} = require('stream');
 const express = require('express');
 const testutils = require('../utils/index');
 

@@ -12,7 +12,6 @@ const basePath = (function() {
     require('core-js/modules/es.object.keys');
     require('core-js/modules/es.symbol');
     require('core-js/modules/es.symbol.async-iterator');
-    require('regenerator-runtime/runtime');
     libs.exceljs = require('../../dist/es5');
     return '../../dist/es5/';
   }
