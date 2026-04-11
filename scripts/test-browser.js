@@ -16,7 +16,7 @@ const bundlePath = path.resolve(__dirname, '..', 'dist', 'exceljs.js');
 const minBundlePath = path.resolve(__dirname, '..', 'dist', 'exceljs.min.js');
 const bareBundlePath = path.resolve(__dirname, '..', 'dist', 'exceljs.bare.js');
 
-async function runTests() {
+function runTests() {
   let passed = 0;
   let failed = 0;
 
@@ -136,7 +136,9 @@ async function runTests() {
   }
 }
 
-runTests().catch(err => {
+try {
+  runTests();
+} catch (err) {
   console.error('Test runner error:', err);
   process.exit(1);
-});
+}
