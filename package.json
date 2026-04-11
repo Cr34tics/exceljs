@@ -114,7 +114,7 @@
     "chai": "6.2.2",
     "create-hash": "1.2.0",
     "create-hmac": "1.1.7",
-    "cross-env": "7.0.3",
+    "cross-env": "10.1.0",
     "dirty-chai": "3.0.0",
     "esbuild": "0.28.0",
     "eslint": "10.2.0",
