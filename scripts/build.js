@@ -127,13 +127,13 @@ async function build() {
     minify: true,
   });
 
-  // 4. Transpile lib/ to dist/es5/ (Node-compatible build)
+  // 4. Transpile lib/ to dist/cjs/ (Node 20+ CJS build)
   const libDir = path.resolve(__dirname, '..', 'lib');
-  const es5Dir = path.join(distDir, 'es5');
+  const cjsDir = path.join(distDir, 'cjs');
 
   await esbuild.build({
     entryPoints: collectJsFiles(libDir),
-    outdir: es5Dir,
+    outdir: cjsDir,
     outbase: libDir,
     platform: 'node',
     format: 'cjs',
@@ -142,8 +142,8 @@ async function build() {
   });
 
   // Copy the nodejs entry as index.js
-  const nodejsEntry = path.join(es5Dir, 'exceljs.nodejs.js');
-  const indexEntry = path.join(es5Dir, 'index.js');
+  const nodejsEntry = path.join(cjsDir, 'exceljs.nodejs.js');
+  const indexEntry = path.join(cjsDir, 'index.js');
   if (fs.existsSync(nodejsEntry)) {
     fs.copyFileSync(nodejsEntry, indexEntry);
   }

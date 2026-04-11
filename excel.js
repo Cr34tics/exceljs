@@ -4,9 +4,9 @@
  * or https://github.com/exceljs/exceljs/blob/master/LICENSE
  */
 
-if (parseInt(process.versions.node.split('.')[0], 10) < 10) {
+if (parseInt(process.versions.node.split('.')[0], 10) < 20) {
   throw new Error(
-    'For node versions older than 10, please use the ES5 Import: https://github.com/exceljs/exceljs#es5-imports'
+    'ExcelJS requires Node.js 20 or later. For older Node versions, please use the CJS import: https://github.com/exceljs/exceljs#es5-imports'
   );
 }
 

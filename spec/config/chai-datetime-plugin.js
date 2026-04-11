@@ -11,6 +11,9 @@ module.exports = function chaiDatetimePlugin(chai) {
   }
 
   Assertion.addChainableMethod('equalDate', function(expected) {
+    new Assertion(this._obj).to.be.instanceOf(Date);
+    new Assertion(expected).to.be.instanceOf(Date);
+
     const actualFormatted = formatDate(this._obj);
     const expectedFormatted = formatDate(expected);
 

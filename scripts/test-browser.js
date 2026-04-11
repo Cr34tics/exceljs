@@ -5,7 +5,7 @@
 // This replaces the former grunt-contrib-jasmine browser tests and the Node VM-based
 // smoke tests, providing genuine browser coverage.
 
-const {chromium} = require('playwright');
+const {chromium} = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
