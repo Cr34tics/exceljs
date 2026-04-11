@@ -202,6 +202,31 @@ async function runTests() {
       report('should write csv via buffer', false, err.message);
     }
 
+    // Test: worksheet protection with password hashing (exercises crypto.createHash in browser)
+    try {
+      const result = await page.evaluate(async () => {
+        const wb = new window.ExcelJS.Workbook();
+        const ws = wb.addWorksheet('protected');
+        ws.getCell('A1').value = 'Protected content';
+        ws.protect('testPassword', {});
+
+        const buffer = await wb.xlsx.writeBuffer();
+        const wb2 = new window.ExcelJS.Workbook();
+        await wb2.xlsx.load(buffer);
+        const ws2 = wb2.getWorksheet('protected');
+
+        return {
+          hasProtection: ws2.sheetProtection !== undefined && ws2.sheetProtection !== null,
+          a1: ws2.getCell('A1').value,
+        };
+      });
+      const ok = result.hasProtection && result.a1 === 'Protected content';
+      report('should support worksheet protection with password hashing', ok,
+        !ok && `hasProtection=${result.hasProtection}, A1=${result.a1}`);
+    } catch (err) {
+      report('should support worksheet protection with password hashing', false, err.message);
+    }
+
     // Report any unexpected console errors
     if (consoleErrors.length > 0) {
       console.warn(`\n  ⚠ Browser console errors:\n    ${consoleErrors.join('\n    ')}`);

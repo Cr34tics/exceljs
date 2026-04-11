@@ -1,5 +1,9 @@
 // Browser-compatible crypto shim for esbuild browser builds.
-// Implements randomBytes() using the Web Crypto API when available.
+// Provides randomBytes() via Web Crypto API, and createHash/createHmac
+// via the create-hash/create-hmac packages (pure-JS browser implementations).
+
+import _createHash from 'create-hash';
+import _createHmac from 'create-hmac';
 
 function getGlobalScope() {
   if (typeof globalThis !== 'undefined') {
@@ -35,25 +39,16 @@ export function randomBytes(size) {
 }
 
 export function createHash(algorithm) {
-  throw new Error(
-    `crypto.createHash("${algorithm || ''}") is not supported in browser builds. ` +
-      'Features requiring hashing (e.g. worksheet protection) need Node.js ' +
-      'or a browser-compatible crypto polyfill.'
-  );
+  return _createHash(algorithm);
 }
 
-export function createHmac(algorithm) {
-  throw new Error(
-    `crypto.createHmac("${algorithm || ''}") is not supported in browser builds. ` +
-      'Features requiring HMAC need Node.js or a browser-compatible crypto polyfill.'
-  );
+export function createHmac(algorithm, key) {
+  return _createHmac(algorithm, key);
 }
 
+// Supported algorithms from the create-hash/create-hmac packages
 export function getHashes() {
-  throw new Error(
-    'crypto.getHashes() is not supported in browser builds. ' +
-      'Features requiring hash enumeration need Node.js or a browser-compatible crypto polyfill.'
-  );
+  return ['md5', 'ripemd160', 'rmd160', 'sha', 'sha1', 'sha224', 'sha256', 'sha384', 'sha512'];
 }
 
 export default {randomBytes, createHash, createHmac, getHashes};
