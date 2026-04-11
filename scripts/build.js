@@ -6,7 +6,8 @@ const path = require('path');
 
 const distDir = path.resolve(__dirname, '..', 'dist');
 
-// Ensure dist directory exists
+// Clean and recreate dist directory to prevent stale artifacts
+fs.rmSync(distDir, {recursive: true, force: true});
 fs.mkdirSync(distDir, {recursive: true});
 
 const today = new Date();

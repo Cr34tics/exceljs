@@ -89,29 +89,31 @@ module.exports = function chaiXmlPlugin(chai, utils) {
     const {error} = parseXml(this._obj);
     this.assert(
       error === null,
-      'expected #{this} to be valid XML',
+      'expected #{this} to be valid XML but got error: #{act}',
       'expected #{this} to not be valid XML',
+      null,
       error
     );
   });
 
   const compareXml = function(_super) {
+    // eslint-disable-next-line consistent-return
     return function assertEqual(value) {
-      if (flag(this, 'xml')) {
-        const negate = flag(this, 'negate');
-        const actual = parseXml(this._obj);
-        const expected = parseXml(value);
-
-        new Assertion(actual.error).to.equal(null);
-        new Assertion(expected.error).to.equal(null);
-
-        if (negate) {
-          new Assertion(actual.root).to.not.deep.equal(expected.root);
-        } else {
-          new Assertion(actual.root).to.deep.equal(expected.root);
-        }
-      } else {
+      if (!flag(this, 'xml')) {
         return _super.apply(this, arguments);
+      }
+
+      const negate = flag(this, 'negate');
+      const actual = parseXml(this._obj);
+      const expected = parseXml(value);
+
+      new Assertion(actual.error).to.equal(null);
+      new Assertion(expected.error).to.equal(null);
+
+      if (negate) {
+        new Assertion(actual.root).to.not.deep.equal(expected.root);
+      } else {
+        new Assertion(actual.root).to.deep.equal(expected.root);
       }
     };
   };

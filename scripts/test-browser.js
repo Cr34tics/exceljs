@@ -1,5 +1,6 @@
 'use strict';
 
+/* global window */
 // Browser-bundle tests using Playwright: validates that the built dist/exceljs.js
 // bundle works correctly in a real headless browser environment.
 // This replaces the former grunt-contrib-jasmine browser tests and the Node VM-based
@@ -80,7 +81,7 @@ async function runTests() {
   let browser;
   try {
     server = await createServer();
-    const port = server.address().port;
+    const {port} = server.address();
     browser = await chromium.launch();
     const context = await browser.newContext();
     const page = await context.newPage();
@@ -233,7 +234,14 @@ async function runTests() {
     }
   } finally {
     if (browser) await browser.close();
-    if (server) server.close();
+    if (server) {
+      await new Promise((resolve, reject) => {
+        server.close(err => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+    }
   }
 
   console.log(`\n${passed + failed} tests: ${passed} passing, ${failed} failing`);

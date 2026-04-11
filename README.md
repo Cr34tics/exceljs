@@ -181,53 +181,18 @@ To be clear, all contributions added to this library will be included in the lib
 const ExcelJS = require('exceljs');
 ```
 
-## ES5 Imports[⬆](#contents)<!-- Link generated with jump2header -->
+## CJS Imports[⬆](#contents)<!-- Link generated with jump2header -->
 
-To use the ES5 transpiled code, for example for node.js versions older than 10, use the dist/es5 path.
-
-```javascript
-const ExcelJS = require('exceljs/dist/es5');
-```
-
-**Note:** The ES5 build has an implicit dependency on a number of polyfills which are no longer
- explicitly added by exceljs.
- You will need to add "core-js" and "regenerator-runtime" to your dependencies and
- include the following requires in your code before the exceljs import:
+To use the CJS build from the dist folder (e.g. for bundler compatibility), use the dist/cjs path.
 
 ```javascript
-// polyfills required by exceljs
-require('core-js/modules/es.promise');
-require('core-js/modules/es.string.includes');
-require('core-js/modules/es.object.assign');
-require('core-js/modules/es.object.keys');
-require('core-js/modules/es.symbol');
-require('core-js/modules/es.symbol.async-iterator');
-require('regenerator-runtime/runtime');
-
-const ExcelJS = require('exceljs/dist/es5');
+const ExcelJS = require('exceljs/dist/cjs');
 ```
 
-For IE 11, you'll also need a polyfill to support unicode regex patterns. For example,
+**Note:** The main entry point (`require('exceljs')`) is recommended for most use cases.
+The CJS build targets Node.js 20+ and does not include polyfills.
 
-```js
-const rewritePattern = require('regexpu-core');
-const {generateRegexpuOptions} = require('@babel/helper-create-regexp-features-plugin/lib/util');
-
-const {RegExp} = global;
-try {
-  new RegExp('a', 'u');
-} catch (err) {
-  global.RegExp = function(pattern, flags) {
-    if (flags && flags.includes('u')) {
-      return new RegExp(rewritePattern(pattern, flags, generateRegexpuOptions({flags, pattern})));
-    }
-    return new RegExp(pattern, flags);
-  };
-  global.RegExp.prototype = RegExp.prototype;
-}
-```
-
-## Browserify[⬆](#contents)<!-- Link generated with jump2header -->
+## Browser Bundles[⬆](#contents)<!-- Link generated with jump2header -->
 
 ExcelJS publishes two browserified bundles inside the dist/ folder:
 

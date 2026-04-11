@@ -12,7 +12,7 @@ const compat = new FlatCompat({
 module.exports = [
   // Ignores (replaces .eslintignore)
   {
-    ignores: ['build/**', 'dist/**', 'out/**', 'spec/manual/public/**', 'scripts/**'],
+    ignores: ['build/**', 'dist/**', 'out/**', 'spec/manual/public/**', 'scripts/shims/**', 'scripts/empty-module.js'],
   },
 
   // Airbnb base via FlatCompat (legacy config bridge)
@@ -79,6 +79,17 @@ module.exports = [
         {anonymous: 'never', named: 'never', asyncArrow: 'always'},
       ],
       strict: ['off'],
+    },
+  },
+
+  // Override for build/test scripts — allow console, process.exit, and devDependency imports
+  {
+    files: ['scripts/**/*.js'],
+    rules: {
+      'no-console': 'off',
+      'n/no-process-exit': 'off',
+      'import/no-extraneous-dependencies': ['error', {devDependencies: true}],
+      'no-shadow': 'off',
     },
   },
 ];
