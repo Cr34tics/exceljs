@@ -19,7 +19,7 @@ jobs:
           registry-url: 'https://npm.pkg.github.com'
       - name: Install dependencies
         working-directory: ./
-        run: npm install --production
+        run: npm ci
       - name: Build package
         working-directory: ./
         run: npm run build
