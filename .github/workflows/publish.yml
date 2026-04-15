@@ -1,0 +1,29 @@
+name: Publish Package to GitHub Packages
+on:
+  release:
+    types: [published]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    defaults:
+      run:
+        working-directory: ./
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22.x'
+          registry-url: 'https://npm.pkg.github.com'
+      - name: Install dependencies
+        working-directory: ./
+        run: npm ci
+      - name: Build package
+        working-directory: ./
+        run: npm run build
+      - name: Publish package
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
