@@ -1,28 +1,27 @@
 name: Publish Package to GitHub Packages
+
 on:
   release:
     types: [published]
+
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    defaults:
-      run:
-        working-directory: ./
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: '24.x'
           registry-url: 'https://npm.pkg.github.com'
+      - name: Enable Corepack
+        run: corepack enable
       - name: Install dependencies
-        working-directory: ./
-        run: npm ci
+        run: yarn install --immutable
       - name: Build package
-        working-directory: ./
-        run: npm run build
+        run: yarn build
       - name: Publish package
         run: npm publish
         env:

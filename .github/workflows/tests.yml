@@ -2,9 +2,12 @@ name: Tests
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ '**' ]
+    branches: ['**']
+
+env:
+  CI: true
 
 jobs:
   test:
@@ -24,37 +27,26 @@ jobs:
           git config --global core.autocrlf false
           git config --global core.symlinks true
         if: runner.os == 'Windows'
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6 #latest v4. TODO upgrade
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6 #latest  v3. TODO upgrade
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: ${{ matrix.node-version }}
-      - name: Create the npm cache directory
-        run: mkdir npm-cache && npm config set cache ./npm-cache --global
-      - name: Cache node modules
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5 #latest v3 TODO upgrade
+      - name: Enable Corepack
+        run: corepack enable
+      - name: Cache Yarn
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
-          path: ./npm-cache
-          key: v1-${{ runner.os }}-node-${{ matrix.node-version }}-npm-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            v1-${{ runner.os }}-node-${{ matrix.node-version }}-npm-
-      - run: npm ci
-      - run: npm run build
-        env:
-          CI: true
-      - run: npm run test:unit
-        env:
-          CI: true
-      - run: npm run test:integration
-        env:
-          CI: true
-      - run: npm run test:end-to-end
-        env:
-          CI: true
-      - run: npx playwright install chromium
-      - run: npm run test:browser:run
-        env:
-          CI: true
+          path: .yarn/cache
+          key: ${{ runner.os }}-yarn-${{ hashFiles('yarn.lock') }}
+          restore-keys: ${{ runner.os }}-yarn-
+      - run: yarn install --immutable
+      - run: yarn build
+      - run: yarn test:unit
+      - run: yarn test:integration
+      - run: yarn test:end-to-end
+      - run: yarn playwright install chromium
+      - run: yarn test:browser:run
 
   benchmark:
     timeout-minutes: 15
@@ -62,23 +54,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6 #latest v4. TODO upgrade
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6 #latest  v3. TODO upgrade
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: 24
-      - name: Create the npm cache directory
-        run: mkdir npm-cache && npm config set cache ./npm-cache --global
-      - name: Cache node modules
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5 #latest v3 TODO upgrade
+      - name: Enable Corepack
+        run: corepack enable
+      - name: Cache Yarn
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
-          path: ./npm-cache
-          key: v1-npm-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            v1-npm-
-      - run: npm ci
-      - run: npm run benchmark
-        env:
-          CI: true
+          path: .yarn/cache
+          key: ${{ runner.os }}-yarn-${{ hashFiles('yarn.lock') }}
+          restore-keys: ${{ runner.os }}-yarn-
+      - run: yarn install --immutable
+      - run: yarn benchmark
 
   typescript:
     timeout-minutes: 15
@@ -86,20 +75,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6 #latest v4. TODO upgrade
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6 #latest  v3. TODO upgrade
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: 24
-      - name: Create the npm cache directory
-        run: mkdir npm-cache && npm config set cache ./npm-cache --global
-      - name: Cache node modules
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5 #latest v3 TODO upgrade
+      - name: Enable Corepack
+        run: corepack enable
+      - name: Cache Yarn
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
-          path: ./npm-cache
-          key: v1-npm-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            v1-npm-
-      - run: npm ci
-      - run: tsc --noEmit -p tsconfig.check-types.json
-        env:
-          CI: true
+          path: .yarn/cache
+          key: ${{ runner.os }}-yarn-${{ hashFiles('yarn.lock') }}
+          restore-keys: ${{ runner.os }}-yarn-
+      - run: yarn install --immutable
+      - run: yarn tsc --noEmit -p tsconfig.check-types.json

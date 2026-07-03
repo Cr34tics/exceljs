@@ -2,7 +2,6 @@
   "name": "@cr34tics/exceljs",
   "version": "4.4.0",
   "description": "Excel Workbook Manager - Read and Write xlsx and csv Files.",
-  "private": false,
   "license": "MIT",
   "author": {
     "name": "Guyon Roche",
@@ -29,24 +28,24 @@
     "index.d.ts"
   ],
   "scripts": {
-    "test": "npm run test:full",
-    "test:cjs": "cross-env EXCEL_BUILD=cjs npm run test:full",
-    "test:full": "npm run build && npm run test:unit && npm run test:integration && npm run test:end-to-end && npm run test:browser",
-    "test:version": "npm run build && npm run test:unit && npm run test:integration && npm run test:end-to-end && npm run test:browser && npm run test:dist",
-    "test:all": "npm run test:native && npm run test:cjs",
-    "test:native": "npm run test:full",
+    "test": "yarn test:full",
+    "test:cjs": "cross-env EXCEL_BUILD=cjs yarn test:full",
+    "test:full": "yarn build && yarn test:unit && yarn test:integration && yarn test:end-to-end && yarn test:browser",
+    "test:version": "yarn build && yarn test:unit && yarn test:integration && yarn test:end-to-end && yarn test:browser && yarn test:dist",
+    "test:all": "yarn test:native && yarn test:cjs",
+    "test:native": "yarn test:full",
     "test:unit": "mocha --require spec/config/setup.js --require spec/config/setup-unit.js spec/unit --recursive",
     "test:integration": "mocha --require spec/config/setup.js spec/integration --recursive",
     "test:end-to-end": "mocha --require spec/config/setup.js spec/end-to-end --recursive",
-    "test:browser": "npm run build && npm run test:browser:run",
+    "test:browser": "yarn build && yarn test:browser:run",
     "test:browser:run": "node scripts/test-browser.js",
-    "test:unit:cjs": "cross-env EXCEL_BUILD=cjs npm run test:unit",
-    "test:integration:cjs": "cross-env EXCEL_BUILD=cjs npm run test:integration",
-    "test:end-to-end:cjs": "cross-env EXCEL_BUILD=cjs npm run test:end-to-end",
+    "test:unit:cjs": "cross-env EXCEL_BUILD=cjs yarn test:unit",
+    "test:integration:cjs": "cross-env EXCEL_BUILD=cjs yarn test:integration",
+    "test:end-to-end:cjs": "cross-env EXCEL_BUILD=cjs yarn test:end-to-end",
     "test:dist": "mocha --require spec/config/setup.js spec/dist --recursive",
     "test:manual": "node spec/manual/app.js",
     "test:typescript": "mocha -r ts-node/register spec/typescript/**/*.spec.ts",
-    "clean-build": "npm run clean && npm run build",
+    "clean-build": "yarn clean && yarn build",
     "lint": "eslint .",
     "lint:fix": "prettier-eslint --write $(pwd)'/**/*.js'",
     "lint:staged": "lint-staged",
@@ -54,8 +53,7 @@
     "benchmark": "node --expose-gc benchmark",
     "benchmark:debug": "node --expose-gc --inspect-brk --trace-deopt benchmark",
     "build": "node scripts/build.js",
-    "install-build": "(npm ci 2>/dev/null || npm install) && node scripts/build.js",
-    "preversion": "npm run clean && npm run build && npm run test:version",
+    "preversion": "yarn clean && yarn build && yarn test:version",
     "postversion": "git push --no-verify && git push --tags --no-verify"
   },
   "lint-staged": {
@@ -98,11 +96,6 @@
     "saxes": "^6.0.0",
     "unzipper": "^0.12.0"
   },
-  "overrides": {
-    "eslint-config-airbnb-base": {
-      "eslint": "$eslint"
-    }
-  },
   "devDependencies": {
     "@eslint/eslintrc": "3.3.5",
     "@eslint/js": "10.0.1",
@@ -133,5 +126,6 @@
     "stream-browserify": "3.0.0",
     "ts-node": "10.9.2",
     "typescript": "6.0.3"
-  }
+  },
+  "packageManager": "yarn@4.17.0"
 }

@@ -1,6 +1,6 @@
 # ExcelJS
 
-[![Build Status](https://github.com/exceljs/exceljs/actions/workflows/tests.yml/badge.svg?branch=master&event=push)](https://github.com/exceljs/exceljs/actions/workflows/tests.yml)
+[![Build Status](https://github.com/Cr34tics/exceljs/actions/workflows/tests.yml/badge.svg?branch=master&event=push)](https://github.com/Cr34tics/exceljs/actions/workflows/tests.yml)
 
 Read, manipulate and write spreadsheet data and styles to XLSX and JSON.
 

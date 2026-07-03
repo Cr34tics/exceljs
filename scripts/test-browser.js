@@ -72,7 +72,7 @@ async function runTests() {
   report('dist/exceljs.bare.js should exist', fs.existsSync(bareBundlePath));
 
   if (!bundleExists) {
-    console.error('\nCannot run browser tests: dist/exceljs.js is missing. Run "npm run build" first.');
+    console.error('\nCannot run browser tests: dist/exceljs.js is missing. Run "yarn build" first.');
     process.exit(1);
   }
 
