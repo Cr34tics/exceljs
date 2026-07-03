@@ -3,6 +3,16 @@ name: Publish Package to GitHub Packages
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g. 5.0.0). Defaults to the version in package.json.'
+        required: false
+        type: string
+
+concurrency:
+  group: publish-${{ github.event.release.tag_name || inputs.version || github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -22,6 +32,28 @@ jobs:
         run: yarn install --immutable
       - name: Build package
         run: yarn build
+      # The published version is derived from the release tag (the source of
+      # truth for a release) so a forgotten package.json bump can never silently
+      # re-publish the previous version again. Falls back to the workflow_dispatch
+      # input, then to whatever is already in package.json.
+      - name: Resolve version to publish
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          else
+            VERSION="${{ inputs.version }}"
+          fi
+          VERSION="${VERSION#v}"
+          if [ -z "$VERSION" ]; then
+            VERSION="$(node -p "require('./package.json').version")"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Publishing @cr34tics/exceljs@$VERSION"
+      - name: Set package version
+        # npm pkg set only rewrites the version field; it does NOT run the
+        # preversion/postversion lifecycle hooks (which build, test and git push).
+        run: npm pkg set version="${{ steps.version.outputs.version }}"
       - name: Publish package
         run: npm publish
         env:
