@@ -33,12 +33,16 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
       - name: Enable Corepack
-        # Node 26 bundles a Corepack that fails to shim over the runner's global
-        # Yarn 1.x on Windows ("current global version of Yarn is 1.22.22").
-        # Install the latest Corepack so its yarn shim reliably takes precedence.
+        # Node 26's bundled Corepack fails to shim over the runner's pre-installed
+        # global Yarn 1.x on Windows ("current global version of Yarn is 1.22.22").
+        # Remove the classic global yarn so nothing shadows the Corepack shim,
+        # then enable Corepack, pin the expected Yarn, and verify it is active.
+        shell: bash
         run: |
-          npm install -g corepack@latest
+          npm rm -g yarn 2>/dev/null || true
           corepack enable
+          corepack prepare yarn@4.17.0 --activate
+          echo "Active yarn: $(yarn --version)"
       - name: Cache Yarn
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
@@ -71,12 +75,16 @@ jobs:
         with:
           node-version: 24
       - name: Enable Corepack
-        # Node 26 bundles a Corepack that fails to shim over the runner's global
-        # Yarn 1.x on Windows ("current global version of Yarn is 1.22.22").
-        # Install the latest Corepack so its yarn shim reliably takes precedence.
+        # Node 26's bundled Corepack fails to shim over the runner's pre-installed
+        # global Yarn 1.x on Windows ("current global version of Yarn is 1.22.22").
+        # Remove the classic global yarn so nothing shadows the Corepack shim,
+        # then enable Corepack, pin the expected Yarn, and verify it is active.
+        shell: bash
         run: |
-          npm install -g corepack@latest
+          npm rm -g yarn 2>/dev/null || true
           corepack enable
+          corepack prepare yarn@4.17.0 --activate
+          echo "Active yarn: $(yarn --version)"
       - name: Cache Yarn
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
@@ -97,12 +105,16 @@ jobs:
         with:
           node-version: 24
       - name: Enable Corepack
-        # Node 26 bundles a Corepack that fails to shim over the runner's global
-        # Yarn 1.x on Windows ("current global version of Yarn is 1.22.22").
-        # Install the latest Corepack so its yarn shim reliably takes precedence.
+        # Node 26's bundled Corepack fails to shim over the runner's pre-installed
+        # global Yarn 1.x on Windows ("current global version of Yarn is 1.22.22").
+        # Remove the classic global yarn so nothing shadows the Corepack shim,
+        # then enable Corepack, pin the expected Yarn, and verify it is active.
+        shell: bash
         run: |
-          npm install -g corepack@latest
+          npm rm -g yarn 2>/dev/null || true
           corepack enable
+          corepack prepare yarn@4.17.0 --activate
+          echo "Active yarn: $(yarn --version)"
       - name: Cache Yarn
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
@@ -123,12 +135,16 @@ jobs:
         with:
           node-version: 24
       - name: Enable Corepack
-        # Node 26 bundles a Corepack that fails to shim over the runner's global
-        # Yarn 1.x on Windows ("current global version of Yarn is 1.22.22").
-        # Install the latest Corepack so its yarn shim reliably takes precedence.
+        # Node 26's bundled Corepack fails to shim over the runner's pre-installed
+        # global Yarn 1.x on Windows ("current global version of Yarn is 1.22.22").
+        # Remove the classic global yarn so nothing shadows the Corepack shim,
+        # then enable Corepack, pin the expected Yarn, and verify it is active.
+        shell: bash
         run: |
-          npm install -g corepack@latest
+          npm rm -g yarn 2>/dev/null || true
           corepack enable
+          corepack prepare yarn@4.17.0 --activate
+          echo "Active yarn: $(yarn --version)"
       - name: Cache Yarn
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
