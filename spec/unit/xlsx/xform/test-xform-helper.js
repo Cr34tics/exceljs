@@ -51,7 +51,7 @@ const its = {
       }))
   },
 
-  'prepare-render': function (expectation) {
+  'prepare-render'(expectation) {
     // when implementation details get in the way of testing the prepared result
     it('Prepare and Render to XML', () =>
       new Promise((resolve) => {

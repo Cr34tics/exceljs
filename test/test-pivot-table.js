@@ -4,8 +4,6 @@
 //
 // Last updated: 2023-10-19
 // --------------------------------------------------
-/* eslint-disable */
-
 function main(filepath) {
   const Excel = require('../lib/exceljs.nodejs.js')
 

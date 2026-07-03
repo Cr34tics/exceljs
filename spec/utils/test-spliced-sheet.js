@@ -334,7 +334,6 @@ module.exports = {
         wsSquare.addRow(['2,1', '2,2', '2,3', '2,4'])
         wsSquare.addRow(['3,1', '3,2', '3,3', '3,4'])
         wsSquare.addRow(['4,1', '4,2', '4,3', '4,4'])
-
         ;['A', 'B', 'C', 'D'].forEach((col) => {
           ;[1, 2, 3, 4].forEach((row) => {
             wsSquare.getCell(col + row).name = 'square'
@@ -348,7 +347,6 @@ module.exports = {
         wsSingles.getCell('A4').value = '4,1'
         wsSingles.getCell('D1').value = '1,4'
         wsSingles.getCell('D4').value = '4,4'
-
         ;['A', 'D'].forEach((col) => {
           ;[1, 4].forEach((row) => {
             wsSingles.getCell(col + row).name = `single-${col}${row}`
@@ -376,7 +374,6 @@ module.exports = {
           '4,3',
           '4,4',
         ])
-
         ;['A', 'B', 'C', 'D'].forEach((col) => {
           ;[1, 2, 3].forEach((row) => {
             if (row === 3) {
@@ -406,7 +403,6 @@ module.exports = {
         wsSquare.addRow(['2,1', '2,2', '2,3', '2,4'])
         wsSquare.addRow(['3,1', '3,2', '3,3', '3,4'])
         wsSquare.addRow(['4,1', '4,2', '4,3', '4,4'])
-
         ;['A', 'B', 'C', 'D'].forEach((col) => {
           ;[1, 2, 3, 4].forEach((row) => {
             wsSquare.getCell(col + row).name = 'square'
@@ -420,7 +416,6 @@ module.exports = {
         wsSingles.getCell('A4').value = '4,1'
         wsSingles.getCell('D1').value = '1,4'
         wsSingles.getCell('D4').value = '4,4'
-
         ;['A', 'D'].forEach((col) => {
           ;[1, 4].forEach((row) => {
             wsSingles.getCell(col + row).name = `single-${col}${row}`
@@ -469,7 +464,6 @@ module.exports = {
           '4,3',
           '4,4',
         ])
-
         ;['A', 'B', 'C', 'D'].forEach((col) => {
           ;[1, 2, 3, 4, 5].forEach((row) => {
             if (row === 3) {
@@ -505,7 +499,6 @@ module.exports = {
         wsSquare.addRow(['2,1', '2,2', '2,3', '2,4'])
         wsSquare.addRow(['3,1', '3,2', '3,3', '3,4'])
         wsSquare.addRow(['4,1', '4,2', '4,3', '4,4'])
-
         ;['A', 'B', 'C', 'D'].forEach((col) => {
           ;[1, 2, 3, 4].forEach((row) => {
             wsSquare.getCell(col + row).name = 'square'
@@ -519,7 +512,6 @@ module.exports = {
         wsSingles.getCell('A4').value = '4,1'
         wsSingles.getCell('D1').value = '1,4'
         wsSingles.getCell('D4').value = '4,4'
-
         ;['A', 'D'].forEach((col) => {
           ;[1, 4].forEach((row) => {
             wsSingles.getCell(col + row).name = `single-${col}${row}`
@@ -561,7 +553,6 @@ module.exports = {
           '4,3',
           '4,4',
         ])
-
         ;['A', 'B', 'C', 'D'].forEach((col) => {
           ;[1, 2, 3, 4].forEach((row) => {
             if (row === 2) {
@@ -1021,7 +1012,6 @@ module.exports = {
         wsSquare.addRow(['2,1', '2,2', '2,3', '2,4'])
         wsSquare.addRow(['3,1', '3,2', '3,3', '3,4'])
         wsSquare.addRow(['4,1', '4,2', '4,3', '4,4'])
-
         ;['A', 'B', 'C', 'D'].forEach((col) => {
           ;[1, 2, 3, 4].forEach((row) => {
             wsSquare.getCell(col + row).name = 'square'
@@ -1035,7 +1025,6 @@ module.exports = {
         wsSingles.getCell('A4').value = '4,1'
         wsSingles.getCell('D1').value = '1,4'
         wsSingles.getCell('D4').value = '4,4'
-
         ;['A', 'D'].forEach((col) => {
           ;[1, 4].forEach((row) => {
             wsSingles.getCell(col + row).name = `single-${col}${row}`
@@ -1053,7 +1042,6 @@ module.exports = {
         expect(wsSquare.getRow(2).values).to.deep.equal([, '2,1', '2,4'])
         expect(wsSquare.getRow(3).values).to.deep.equal([, '3,1', '3,4'])
         expect(wsSquare.getRow(4).values).to.deep.equal([, '4,1', '4,4'])
-
         ;['A', 'B', 'C', 'D'].forEach((col) => {
           ;[1, 2, 3].forEach((row) => {
             if (['C', 'D'].includes(col)) {
@@ -1083,7 +1071,6 @@ module.exports = {
         wsSquare.addRow(['2,1', '2,2', '2,3', '2,4'])
         wsSquare.addRow(['3,1', '3,2', '3,3', '3,4'])
         wsSquare.addRow(['4,1', '4,2', '4,3', '4,4'])
-
         ;['A', 'B', 'C', 'D'].forEach((col) => {
           ;[1, 2, 3, 4].forEach((row) => {
             wsSquare.getCell(col + row).name = 'square'
@@ -1097,7 +1084,6 @@ module.exports = {
         wsSingles.getCell('A4').value = '4,1'
         wsSingles.getCell('D1').value = '1,4'
         wsSingles.getCell('D4').value = '4,4'
-
         ;['A', 'D'].forEach((col) => {
           ;[1, 4].forEach((row) => {
             wsSingles.getCell(col + row).name = `single-${col}${row}`
@@ -1143,7 +1129,6 @@ module.exports = {
           '4,3',
           '4,4',
         ])
-
         ;['A', 'B', 'C', 'D', 'E'].forEach((col) => {
           ;[1, 2, 3, 4].forEach((row) => {
             if (col === 'C') {
@@ -1187,7 +1172,6 @@ module.exports = {
         wsSquare.addRow(['2,1', '2,2', '2,3', '2,4'])
         wsSquare.addRow(['3,1', '3,2', '3,3', '3,4'])
         wsSquare.addRow(['4,1', '4,2', '4,3', '4,4'])
-
         ;['A', 'B', 'C', 'D'].forEach((col) => {
           ;[1, 2, 3, 4].forEach((row) => {
             wsSquare.getCell(col + row).name = 'square'
@@ -1201,7 +1185,6 @@ module.exports = {
         wsSingles.getCell('A4').value = '4,1'
         wsSingles.getCell('D1').value = '1,4'
         wsSingles.getCell('D4').value = '4,4'
-
         ;['A', 'D'].forEach((col) => {
           ;[1, 4].forEach((row) => {
             wsSingles.getCell(col + row).name = `single-${col}${row}`
@@ -1243,7 +1226,6 @@ module.exports = {
           '4,3',
           '4,4',
         ])
-
         ;['A', 'B', 'C', 'D'].forEach((col) => {
           ;[1, 2, 3, 4].forEach((row) => {
             if (col === 'B') {

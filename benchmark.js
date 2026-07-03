@@ -1,4 +1,4 @@
-/* eslint-disable no-console, no-unused-vars */
+/* eslint-disable no-unused-vars */
 const ExcelJS = require('./lib/exceljs.nodejs.js')
 
 const runs = 3

@@ -30,7 +30,6 @@ describe('utils', () => {
         expect(utils.isDateFmt(fmt)).to.be.true()
       })
     })
-
     ;['', '[Green]#,##0 ;[Red](#,##0)'].forEach((fmt) => {
       it(`'${fmt}' is not a date`, () => {
         expect(utils.isDateFmt(fmt)).to.be.false()

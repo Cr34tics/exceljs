@@ -10,7 +10,7 @@ ExcelJS is a Node.js library for reading and writing Excel (XLSX) and CSV spread
 - **Package manager:** Yarn (Berry / v4, `nodeLinker: node-modules`; version pinned via `packageManager` + Corepack)
 - **Build system:** esbuild (`scripts/build.js`) — emits the browser UMD bundles in `dist/` and the CommonJS build in `dist/cjs/`
 - **Test framework:** Mocha + Chai (`spec/`); browser tests run in headless Chromium via Playwright (`scripts/test-browser.js`)
-- **Linter:** ESLint flat config (`eslint.config.js`, airbnb-base + `eslint-plugin-n` + prettier)
+- **Linter:** ESLint flat config (`eslint.config.js`) — a curated strict rule set (`@eslint/js` recommended + `eslint-plugin-n` + `eslint-plugin-import-x`); formatting is owned by Prettier (`.prettierrc`), wired in via `eslint-config-prettier`
 
 ## Repository Layout
 
@@ -57,16 +57,12 @@ This runs `node scripts/build.js`, which uses esbuild to:
 1. Bundle the browser UMD builds `dist/exceljs.js` / `dist/exceljs.min.js` (plus `.bare` variants)
 2. Emit the CommonJS build under `dist/cjs/`
 
-### Lint
+### Lint & format
 
 ```bash
-yarn lint
-```
-
-Auto-fix formatting:
-
-```bash
-yarn lint:fix
+yarn lint          # ESLint — correctness & code quality
+yarn lint:fix      # eslint . --fix
+yarn format        # prettier --write .   (formatting is owned by Prettier)
 ```
 
 ### Run tests
@@ -95,8 +91,8 @@ yarn benchmark
 
 ## Code Style and Conventions
 
-- **ESLint config:** `airbnb-base` + `eslint-plugin-n` + `prettier` (flat config in `eslint.config.js`)
-- **Prettier config:** single quotes, 100-char print width, trailing commas, no bracket spacing (see `.prettier`)
+- **ESLint config:** curated strict flat config in `eslint.config.js` — `@eslint/js` recommended + `eslint-plugin-n` + `eslint-plugin-import-x`, with `eslint-config-prettier` last so ESLint defers all formatting to Prettier
+- **Prettier config:** single quotes, 2-space indent, no semicolons, trailing commas (see `.prettierrc`)
 - Single quotes for strings, semicolons required, max line length 120 chars (comments/strings exempt)
 - `n/no-unsupported-features/es-syntax` targets Node >=10
 - No `for...in` loops (`no-restricted-syntax`); use `for...of` or array methods

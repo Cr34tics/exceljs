@@ -325,7 +325,6 @@ const self = {
           result: 2,
         })
         expect(ws.getCell('B9').type).to.equal(ExcelJS.ValueType.Formula)
-
         ;['C9', 'D9', 'E9'].forEach((address, index) => {
           expect(ws.getCell(address).value).to.deep.equal({
             sharedFormula: 'B9',

@@ -1,7 +1,7 @@
 // this module allows the specs to switch between source code and
 // built code depending on the environment variable EXCEL_BUILD
 
-/* eslint-disable import/no-dynamic-require */
+/* eslint-disable import-x/no-dynamic-require */
 
 const libs = {}
 const basePath = (function () {

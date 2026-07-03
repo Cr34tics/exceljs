@@ -2825,7 +2825,7 @@ worksheet.getCell('A2').value = { error: '#VALUE!' }
 
 ### Worksheet.eachRow[⬆](#目录)<!-- Link generated with jump2header -->
 
-在 `Worksheet.eachRow` 的回调函数中的参数已被交换和更改；它是 `function(rowNumber，rowValues)`，现在是 `function(row，rowNumber)`，使它的外观更像 _underscore(`_.each`)方法，并且行对象优先于行号。_
+在 `Worksheet.eachRow` 的回调函数中的参数已被交换和更改；它是 `function(rowNumber，rowValues)`，现在是 `function(row，rowNumber)`，使它的外观更像 _underscore(`_.each`)方法，并且行对象优先于行号。\_
 
 ### Worksheet.getRow[⬆](#目录)<!-- Link generated with jump2header -->
 
