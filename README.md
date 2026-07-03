@@ -190,7 +190,7 @@ const ExcelJS = require('exceljs/dist/cjs')
 ```
 
 **Note:** The main entry point (`require('exceljs')`) is recommended for most use cases.
-The CJS build targets Node.js 20+ and does not include polyfills.
+The CJS build targets Node.js 22+ and does not include polyfills.
 
 ## Browser Bundles[⬆](#contents)<!-- Link generated with jump2header -->
 

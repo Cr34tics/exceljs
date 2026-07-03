@@ -129,7 +129,7 @@ async function build() {
     minify: true,
   })
 
-  // 4. Transpile lib/ to dist/cjs/ (Node 20+ CJS build)
+  // 4. Transpile lib/ to dist/cjs/ (Node 22+ CJS build)
   const libDir = path.resolve(__dirname, '..', 'lib')
   const cjsDir = path.join(distDir, 'cjs')
 
@@ -140,7 +140,7 @@ async function build() {
     platform: 'node',
     format: 'cjs',
     sourcemap: true,
-    target: ['node20'],
+    target: ['node22'],
   })
 
   // Copy the nodejs entry as index.js
