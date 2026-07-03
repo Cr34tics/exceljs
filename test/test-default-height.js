@@ -5,7 +5,7 @@ const [, , filename] = process.argv;
 
 if (!filename) {
   console.error('Must specify a filename');
-  // eslint-disable-next-line no-process-exit
+   
   process.exit(1);
 }
 

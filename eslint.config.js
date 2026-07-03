@@ -63,7 +63,9 @@ module.exports = [
       'no-return-assign': ['off'],
       'no-trailing-spaces': ['error', {skipBlankLines: true}],
       'no-underscore-dangle': ['off', {allowAfterThis: true, allowAfterSuper: true}],
-      'no-unused-vars': ['error', {vars: 'all', args: 'none', ignoreRestSiblings: true}],
+      'no-unused-vars': ['error', {vars: 'all', args: 'none', caughtErrors: 'none', ignoreRestSiblings: true}],
+      // The codebase intentionally uses explicit .js/.json extensions in require() paths.
+      'import/extensions': 'off',
       'no-use-before-define': ['error', {variables: false, classes: false, functions: false}],
       'n/no-unsupported-features/es-syntax': ['error', {version: '>=10.0.0', ignores: []}],
       'n/process-exit-as-throw': ['off'],
@@ -90,6 +92,55 @@ module.exports = [
       'n/no-process-exit': 'off',
       'import/no-extraneous-dependencies': ['error', {devDependencies: true}],
       'no-shadow': 'off',
+    },
+  },
+
+  // Test specs (Mocha + Chai). Mirrors the legacy spec/.eslintrc that the flat-config
+  // migration left orphaned: provides the chai `expect` and the `verquire` helper as
+  // globals, allows devDependency imports, and relaxes rules that are noisy in fixtures.
+  {
+    files: ['spec/**/*.js'],
+    languageOptions: {
+      globals: {
+        expect: 'readonly',
+        verquire: 'readonly',
+      },
+    },
+    rules: {
+      'no-new': 'off',
+      'max-len': 'off',
+      'brace-style': 'off',
+      'array-bracket-spacing': 'off',
+      'no-sparse-arrays': 'off',
+      'object-property-newline': 'off',
+      'prefer-object-spread': 'off',
+      'no-underscore-dangle': 'off',
+      'import/no-extraneous-dependencies': ['error', {devDependencies: true}],
+    },
+  },
+
+  // Standalone manual test scripts under test/ (mirrors the legacy test/.eslintrc).
+  // These are ad-hoc CLI scripts that call process.exit and require lib/ directly.
+  {
+    files: ['test/**/*.js'],
+    rules: {
+      'no-new': 'off',
+      'max-len': 'off',
+      'no-console': 'off',
+      'no-underscore-dangle': 'off',
+      'spaced-comment': 'off',
+      'n/no-process-exit': 'off',
+      'n/no-unpublished-require': 'off',
+      'import/no-extraneous-dependencies': ['error', {devDependencies: true}],
+    },
+  },
+
+  // Root-level tooling / CLI scripts — allow devDependency imports and process.exit.
+  {
+    files: ['eslint.config.js', 'benchmark.js'],
+    rules: {
+      'import/no-extraneous-dependencies': ['error', {devDependencies: true}],
+      'n/no-process-exit': 'off',
     },
   },
 ];

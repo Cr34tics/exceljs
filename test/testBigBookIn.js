@@ -15,7 +15,7 @@ if (process.argv[2] === 'help') {
   console.log('Where:');
   console.log('    reader is one of [stream, document]');
   console.log('    plan is one of [zero, one, two, hyperlinks]');
-  // eslint-disable-next-line no-process-exit
+   
   process.exit(0);
 }
 

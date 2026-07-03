@@ -14,7 +14,7 @@ if (process.argv[2] === 'help') {
   console.log('    writer is one of [stream, document]');
   console.log('    strings is one of [shared, own]');
   console.log('    styles is one of [styled, plain]');
-  // eslint-disable-next-line no-process-exit
+   
   process.exit(0);
 }
 

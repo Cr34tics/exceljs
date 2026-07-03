@@ -11,7 +11,7 @@ const {WorkbookWriter} = Excel.stream.xlsx;
 if (process.argv[2] === 'help') {
   console.log('Usage:');
   console.log('    node testPerformance resultFilename testFilename');
-  // eslint-disable-next-line no-process-exit
+   
   process.exit(0);
 }
 

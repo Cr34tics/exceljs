@@ -5,8 +5,7 @@ const runs = 3;
 
 (async () => {
   try {
-    await runProfiling('huge xlsx file streams', () => {
-      return new Promise((resolve, reject) => {
+    await runProfiling('huge xlsx file streams', () => new Promise((resolve, reject) => {
         // Data taken from http://eforexcel.com/wp/downloads-18-sample-csv-files-data-sets-for-testing-sales/
         const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader(
           './spec/integration/data/huge.xlsx'
@@ -29,8 +28,7 @@ const runs = 3;
           resolve();
         });
         workbookReader.on('error', reject);
-      });
-    });
+      }));
 
     await runProfiling('huge xlsx file async iteration', async () => {
       // Data taken from http://eforexcel.com/wp/downloads-18-sample-csv-files-data-sets-for-testing-sales/
@@ -52,7 +50,7 @@ const runs = 3;
     });
   } catch (err) {
     console.error(err);
-    process.exit(1); // eslint-disable-line no-process-exit
+    process.exit(1);
   }
 })();
 

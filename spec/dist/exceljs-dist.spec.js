@@ -1,26 +1,29 @@
 const fs = require('fs');
 
-const exists = path => new Promise(resolve => fs.exists(path, resolve));
+const exists = path =>
+  new Promise(resolve => {
+    fs.access(path, err => resolve(!err));
+  });
 
 describe('ExcelJS', () => {
   describe('dist folder', () => {
     it('should include LICENSE', async () => {
-      expect(await exists('./dist/LICENSE')).to.be.true()
+      expect(await exists('./dist/LICENSE')).to.be.true();
     });
     it('should include exceljs.js', async () => {
-      expect(await exists('./dist/exceljs.js')).to.be.true()
+      expect(await exists('./dist/exceljs.js')).to.be.true();
     });
     it('should include exceljs.min.js', async () => {
-      expect(await exists('./dist/exceljs.min.js')).to.be.true()
+      expect(await exists('./dist/exceljs.min.js')).to.be.true();
     });
     it('should include exceljs.bare.js', async () => {
-      expect(await exists('./dist/exceljs.bare.js')).to.be.true()
+      expect(await exists('./dist/exceljs.bare.js')).to.be.true();
     });
     it('should include exceljs.bare.min.js', async () => {
-      expect(await exists('./dist/exceljs.bare.min.js')).to.be.true()
+      expect(await exists('./dist/exceljs.bare.min.js')).to.be.true();
     });
     it('should include cjs/index', async () => {
-      expect(await exists('./dist/cjs/index.js')).to.be.true()
+      expect(await exists('./dist/cjs/index.js')).to.be.true();
     });
   });
 });

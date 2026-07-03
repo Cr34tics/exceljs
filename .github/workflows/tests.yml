@@ -89,3 +89,24 @@ jobs:
           restore-keys: ${{ runner.os }}-yarn-
       - run: yarn install --immutable
       - run: yarn tsc --noEmit -p tsconfig.check-types.json
+
+  lint:
+    timeout-minutes: 15
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: 24
+      - name: Enable Corepack
+        run: corepack enable
+      - name: Cache Yarn
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: .yarn/cache
+          key: ${{ runner.os }}-yarn-${{ hashFiles('yarn.lock') }}
+          restore-keys: ${{ runner.os }}-yarn-
+      - run: yarn install --immutable
+      - run: yarn lint
