@@ -183,7 +183,7 @@ const ExcelJS = require('exceljs/dist/cjs')
 ```
 
 **注意：**推荐使用主入口 (`require('exceljs')`)。
-CJS 构建针对 Node.js 20+，不包含 polyfill。
+CJS 构建针对 Node.js 22+，不包含 polyfill。
 
 ## 浏览器端[⬆](#目录)<!-- Link generated with jump2header -->
 
