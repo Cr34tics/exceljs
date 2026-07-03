@@ -11,9 +11,7 @@ env:
 
 jobs:
   test:
-    # macOS runners are slow to cold-install deps and download the Playwright
-    # browser (~165 MB), so give the matrix headroom beyond the fast Linux path.
-    timeout-minutes: 20
+    timeout-minutes: 15
     name: Node v${{ matrix.node-version }} on ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -47,8 +45,13 @@ jobs:
       - run: yarn test:unit
       - run: yarn test:integration
       - run: yarn test:end-to-end
+      # The browser bundle is an OS-agnostic artifact; validate it in headless
+      # Chromium on Linux only. Downloading the Playwright browser on macOS and
+      # Windows runners is slow and prone to CDN-stall hangs.
       - run: yarn playwright install chromium
+        if: runner.os == 'Linux'
       - run: yarn test:browser:run
+        if: runner.os == 'Linux'
 
   benchmark:
     timeout-minutes: 15
