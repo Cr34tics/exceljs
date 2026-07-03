@@ -18,10 +18,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          # Full history so the version sync-back can fast-forward master.
+          fetch-depth: 0
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: '24.x'
@@ -58,3 +61,24 @@ jobs:
         run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Keep the committed package.json in sync with what was just published, so a
+      # release cut without a prior version bump doesn't leave master behind.
+      # Runs only after a successful release publish. A push race here is
+      # non-fatal: the package is already published, which is what matters.
+      - name: Sync package.json version back to master
+        if: github.event_name == 'release'
+        continue-on-error: true
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git fetch origin master
+          git checkout -f -B release-sync FETCH_HEAD
+          npm pkg set version="$VERSION"
+          if git diff --quiet -- package.json; then
+            echo "master already at $VERSION; nothing to sync."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(release): sync package.json to $VERSION [skip ci]" -- package.json
+          git push origin HEAD:master
