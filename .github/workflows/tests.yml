@@ -11,7 +11,9 @@ env:
 
 jobs:
   test:
-    timeout-minutes: 10
+    # macOS runners are slow to cold-install deps and download the Playwright
+    # browser (~165 MB), so give the matrix headroom beyond the fast Linux path.
+    timeout-minutes: 20
     name: Node v${{ matrix.node-version }} on ${{ matrix.os }}
     strategy:
       fail-fast: false
