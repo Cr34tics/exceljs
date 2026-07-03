@@ -90,7 +90,7 @@
     "pageSetup"
   ],
   "dependencies": {
-    "archiver": "^7.0.0",
+    "archiver": "^8.0.0",
     "dayjs": "^1.8.34",
     "fast-csv": "^5.0.0",
     "jszip": "^3.10.1",
@@ -113,11 +113,11 @@
     "eslint": "10.2.0",
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-import-x": "^4.17.0",
-    "eslint-plugin-n": "17.24.0",
+    "eslint-plugin-n": "18.2.1",
     "events": "3.3.0",
     "express": "5.2.1",
     "globals": "17.5.0",
-    "lint-staged": "16.4.0",
+    "lint-staged": "17.0.8",
     "mocha": "11.7.5",
     "prettier": "3.8.4",
     "sax": "1.6.0",
