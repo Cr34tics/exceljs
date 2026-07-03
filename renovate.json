@@ -15,10 +15,12 @@
       "addLabels": ["dependencies"]
     },
     {
-      "description": "Majors gated behind the Dependency Dashboard; open as their own PRs when approved",
+      "description": "Majors gated behind the Dependency Dashboard; grouped into one PR when approved",
       "matchManagers": ["npm", "github-actions"],
       "matchUpdateTypes": ["major"],
       "dependencyDashboardApproval": true,
+      "groupName": "all major dependencies",
+      "groupSlug": "all-major",
       "addLabels": ["dependencies", "major"]
     },
     {
