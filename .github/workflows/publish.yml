@@ -81,6 +81,11 @@ jobs:
           # (re)created from master and --force-with-lease has a ref to lease
           # against on re-runs.
           fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          # Pin Node/npm (same pin as the publish job) so `npm pkg set` doesn't
+          # depend on whatever the ubuntu-latest image happens to ship.
+          node-version: '24.x'
       - name: Open PR to sync package.json version to master
         env:
           VERSION: ${{ needs.publish.outputs.version }}
