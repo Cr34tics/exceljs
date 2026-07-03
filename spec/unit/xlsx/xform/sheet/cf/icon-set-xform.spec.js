@@ -1,19 +1,19 @@
-const testXformHelper = require('../../test-xform-helper');
+const testXformHelper = require('../../test-xform-helper')
 
-const IconSetXform = verquire('xlsx/xform/sheet/cf/icon-set-xform');
+const IconSetXform = verquire('xlsx/xform/sheet/cf/icon-set-xform')
 
 const expectations = [
   {
     title: 'Default Set',
     create() {
-      return new IconSetXform();
+      return new IconSetXform()
     },
     preparedModel: {
       iconSet: '3TrafficLights',
       cfvo: [
-        {type: 'percent', value: 0},
-        {type: 'percent', value: 33},
-        {type: 'percent', value: 67},
+        { type: 'percent', value: 0 },
+        { type: 'percent', value: 33 },
+        { type: 'percent', value: 67 },
       ],
     },
     xml: `
@@ -24,25 +24,25 @@ const expectations = [
       </iconSet>
     `,
     get parsedModel() {
-      return this.preparedModel;
+      return this.preparedModel
     },
     tests: ['render', 'parse'],
   },
   {
     title: 'Reversed & Hide Values',
     create() {
-      return new IconSetXform();
+      return new IconSetXform()
     },
     preparedModel: {
       iconSet: '5Arrows',
       reverse: true,
       showValue: false,
       cfvo: [
-        {type: 'percent', value: 0},
-        {type: 'percent', value: 20},
-        {type: 'percent', value: 40},
-        {type: 'percent', value: 60},
-        {type: 'percent', value: 80},
+        { type: 'percent', value: 0 },
+        { type: 'percent', value: 20 },
+        { type: 'percent', value: 40 },
+        { type: 'percent', value: 60 },
+        { type: 'percent', value: 80 },
       ],
     },
     xml: `
@@ -55,12 +55,12 @@ const expectations = [
       </iconSet>
     `,
     get parsedModel() {
-      return this.preparedModel;
+      return this.preparedModel
     },
     tests: ['render', 'parse'],
   },
-];
+]
 
 describe('IconSetXform', () => {
-  testXformHelper(expectations);
-});
+  testXformHelper(expectations)
+})

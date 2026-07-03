@@ -54,7 +54,8 @@
     "benchmark:debug": "node --expose-gc --inspect-brk --trace-deopt benchmark",
     "build": "node scripts/build.js",
     "preversion": "yarn clean && yarn build && yarn test:version",
-    "postversion": "git push --no-verify && git push --tags --no-verify"
+    "postversion": "git push --no-verify && git push --tags --no-verify",
+    "format": "prettier --write"
   },
   "lint-staged": {
     "*.js": [
@@ -120,6 +121,7 @@
     "globals": "17.5.0",
     "lint-staged": "16.4.0",
     "mocha": "11.7.5",
+    "prettier": "3.8.4",
     "prettier-eslint": "16.4.2",
     "prettier-eslint-cli": "8.0.1",
     "sax": "1.6.0",

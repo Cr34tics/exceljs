@@ -1,13 +1,13 @@
-const testXformHelper = require('../test-xform-helper');
+const testXformHelper = require('../test-xform-helper')
 
-const SheetViewXform = verquire('xlsx/xform/sheet/sheet-view-xform');
-const ListXform = verquire('xlsx/xform/list-xform');
+const SheetViewXform = verquire('xlsx/xform/sheet/sheet-view-xform')
+const ListXform = verquire('xlsx/xform/list-xform')
 
 const expectations = [
   {
     title: 'Normal',
     create: () => new SheetViewXform(),
-    preparedModel: {workbookViewId: 0, state: 'normal', activeCell: 'G4'},
+    preparedModel: { workbookViewId: 0, state: 'normal', activeCell: 'G4' },
     xml:
       '<sheetView workbookViewId="0">' +
       '<selection activeCell="G4" sqref="G4"/>' +
@@ -216,7 +216,7 @@ const expectations = [
         childXform: new SheetViewXform(),
       }),
     preparedModel: [
-      {workbookViewId: 0, state: 'normal', activeCell: 'G4'},
+      { workbookViewId: 0, state: 'normal', activeCell: 'G4' },
       {
         workbookViewId: 1,
         state: 'frozen',
@@ -268,7 +268,7 @@ const expectations = [
   {
     title: 'Right To Left',
     create: () => new SheetViewXform(),
-    preparedModel: {rightToLeft: true},
+    preparedModel: { rightToLeft: true },
     xml: '<sheetView workbookViewId="0" rightToLeft="1"></sheetView>',
     parsedModel: {
       workbookViewId: 0,
@@ -282,8 +282,8 @@ const expectations = [
     },
     tests: ['render', 'renderIn', 'parse'],
   },
-];
+]
 
 describe('SheetViewXform', () => {
-  testXformHelper(expectations);
-});
+  testXformHelper(expectations)
+})

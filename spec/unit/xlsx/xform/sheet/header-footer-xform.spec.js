@@ -1,6 +1,6 @@
-const testXformHelper = require('../test-xform-helper');
+const testXformHelper = require('../test-xform-helper')
 
-const HeaderFooterXform = verquire('xlsx/xform/sheet/header-footer-xform');
+const HeaderFooterXform = verquire('xlsx/xform/sheet/header-footer-xform')
 
 const expectations = [
   {
@@ -49,8 +49,7 @@ const expectations = [
       firstHeader: '&CHome',
       firstFooter: '&CHome',
     },
-    xml:
-      '<headerFooter differentFirst="1"><oddFooter>&amp;CExceljs</oddFooter><firstFooter>&amp;CHome</firstFooter><oddHeader>&amp;CExceljs</oddHeader><firstHeader>&amp;CHome</firstHeader></headerFooter>',
+    xml: '<headerFooter differentFirst="1"><oddFooter>&amp;CExceljs</oddFooter><firstFooter>&amp;CHome</firstFooter><oddHeader>&amp;CExceljs</oddHeader><firstHeader>&amp;CHome</firstHeader></headerFooter>',
     parsedModel: {
       differentFirst: true,
       oddHeader: '&CExceljs',
@@ -70,8 +69,7 @@ const expectations = [
       evenHeader: '&Ceven Header',
       evenFooter: '&Ceven Footer',
     },
-    xml:
-      '<headerFooter differentOddEven="1"><oddHeader>&amp;Codd Header</oddHeader><oddFooter>&amp;Codd Footer</oddFooter><evenHeader>&amp;Ceven Header</evenHeader><evenFooter>&amp;Ceven Footer</evenFooter></headerFooter>',
+    xml: '<headerFooter differentOddEven="1"><oddHeader>&amp;Codd Header</oddHeader><oddFooter>&amp;Codd Footer</oddFooter><evenHeader>&amp;Ceven Header</evenHeader><evenFooter>&amp;Ceven Footer</evenFooter></headerFooter>',
     parsedModel: {
       differentOddEven: true,
       oddHeader: '&Codd Header',
@@ -87,15 +85,14 @@ const expectations = [
     preparedModel: {
       oddFooter: '&C&B&KFF0000Red Bold',
     },
-    xml:
-      '<headerFooter><oddFooter>&amp;C&amp;B&amp;KFF0000Red Bold</oddFooter></headerFooter>',
+    xml: '<headerFooter><oddFooter>&amp;C&amp;B&amp;KFF0000Red Bold</oddFooter></headerFooter>',
     parsedModel: {
       oddFooter: '&C&B&KFF0000Red Bold',
     },
     tests: ['render', 'renderIn', 'parse'],
   },
-];
+]
 
 describe('HeaderFooterXform', () => {
-  testXformHelper(expectations);
-});
+  testXformHelper(expectations)
+})

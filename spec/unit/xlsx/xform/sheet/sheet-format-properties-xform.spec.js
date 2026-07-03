@@ -1,14 +1,14 @@
-const testXformHelper = require('../test-xform-helper');
+const testXformHelper = require('../test-xform-helper')
 
 const SheetFormatPropertiesXform = verquire(
-  'xlsx/xform/sheet/sheet-format-properties-xform'
-);
+  'xlsx/xform/sheet/sheet-format-properties-xform',
+)
 
 const expectations = [
   {
     title: 'full',
     create() {
-      return new SheetFormatPropertiesXform();
+      return new SheetFormatPropertiesXform()
     },
     preparedModel: {
       defaultRowHeight: 14.4,
@@ -17,8 +17,7 @@ const expectations = [
       outlineLevelRow: 5,
       outlineLevelCol: 2,
     },
-    xml:
-      '<sheetFormatPr defaultRowHeight="14.4" defaultColWidth="2.17" customHeight="1" outlineLevelRow="5" outlineLevelCol="2" x14ac:dyDescent="0.55"/>',
+    xml: '<sheetFormatPr defaultRowHeight="14.4" defaultColWidth="2.17" customHeight="1" outlineLevelRow="5" outlineLevelCol="2" x14ac:dyDescent="0.55"/>',
     parsedModel: {
       defaultRowHeight: 14.4,
       defaultColWidth: 2.17,
@@ -31,11 +30,10 @@ const expectations = [
   {
     title: 'default',
     create() {
-      return new SheetFormatPropertiesXform();
+      return new SheetFormatPropertiesXform()
     },
-    preparedModel: {defaultRowHeight: 14.4, dyDescent: 0.55},
-    xml:
-      '<sheetFormatPr defaultRowHeight="14.4" customHeight="1" x14ac:dyDescent="0.55"/>',
+    preparedModel: { defaultRowHeight: 14.4, dyDescent: 0.55 },
+    xml: '<sheetFormatPr defaultRowHeight="14.4" customHeight="1" x14ac:dyDescent="0.55"/>',
     parsedModel: {
       defaultRowHeight: 14.4,
       dyDescent: 0.55,
@@ -44,8 +42,8 @@ const expectations = [
     },
     tests: ['render', 'renderIn', 'parse'],
   },
-];
+]
 
 describe('SheetFormatPropertiesXform', () => {
-  testXformHelper(expectations);
-});
+  testXformHelper(expectations)
+})

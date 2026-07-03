@@ -1,8 +1,8 @@
-const fs = require('fs');
+const fs = require('fs')
 
-const testXformHelper = require('../test-xform-helper');
+const testXformHelper = require('../test-xform-helper')
 
-const CoreXform = verquire('xlsx/xform/core/core-xform');
+const CoreXform = verquire('xlsx/xform/core/core-xform')
 
 const expectations = [
   {
@@ -19,7 +19,7 @@ const expectations = [
       .toString()
       .replace(/\r\n/g, '\n'),
     get parsedModel() {
-      return this.preparedModel;
+      return this.preparedModel
     },
     tests: ['render', 'renderIn', 'parse'],
   },
@@ -43,7 +43,7 @@ const expectations = [
       .toString()
       .replace(/\r\n/g, '\n'),
     get parsedModel() {
-      return this.preparedModel;
+      return this.preparedModel
     },
     tests: ['render', 'renderIn', 'parse'],
   },
@@ -62,7 +62,7 @@ const expectations = [
       .toString()
       .replace(/\r\n/g, '\n'),
     get parsedModel() {
-      return this.preparedModel;
+      return this.preparedModel
     },
     tests: ['render', 'renderIn', 'parse'],
   },
@@ -81,7 +81,7 @@ const expectations = [
       .toString()
       .replace(/\r\n/g, '\n'),
     get parsedModel() {
-      return this.preparedModel;
+      return this.preparedModel
     },
     tests: ['render', 'renderIn', 'parse'],
   },
@@ -115,8 +115,8 @@ const expectations = [
     },
     tests: ['parse'],
   },
-];
+]
 
 describe('CoreXform', () => {
-  testXformHelper(expectations);
-});
+  testXformHelper(expectations)
+})

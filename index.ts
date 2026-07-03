@@ -1,2 +1,2 @@
-import * as ExcelJS from './dist/cjs';
-export default ExcelJS;
+import * as ExcelJS from './dist/cjs'
+export default ExcelJS

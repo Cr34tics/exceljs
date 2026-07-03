@@ -1,18 +1,25 @@
-const {FlatCompat} = require('@eslint/eslintrc');
-const js = require('@eslint/js');
-const nodePlugin = require('eslint-plugin-n');
-const prettierConfig = require('eslint-config-prettier');
-const globals = require('globals');
+const { FlatCompat } = require('@eslint/eslintrc')
+const js = require('@eslint/js')
+const nodePlugin = require('eslint-plugin-n')
+const prettierConfig = require('eslint-config-prettier')
+const globals = require('globals')
 
 const compat = new FlatCompat({
   baseDirectory: __dirname,
   recommendedConfig: js.configs.recommended,
-});
+})
 
 module.exports = [
   // Ignores (replaces .eslintignore)
   {
-    ignores: ['build/**', 'dist/**', 'out/**', 'spec/manual/public/**', 'scripts/shims/**', 'scripts/empty-module.js'],
+    ignores: [
+      'build/**',
+      'dist/**',
+      'out/**',
+      'spec/manual/public/**',
+      'scripts/shims/**',
+      'scripts/empty-module.js',
+    ],
   },
 
   // Airbnb base via FlatCompat (legacy config bridge)
@@ -50,35 +57,63 @@ module.exports = [
       'default-case': ['off'],
       'func-names': ['off', 'never'],
       'global-require': ['off'],
-      'max-len': ['error', {code: 120, ignoreComments: true, ignoreStrings: true}],
-      'no-console': ['error', {allow: ['warn']}],
+      'max-len': [
+        'error',
+        { code: 120, ignoreComments: true, ignoreStrings: true },
+      ],
+      'no-console': ['error', { allow: ['warn'] }],
       'no-continue': ['off'],
-      'no-mixed-operators': ['error', {allowSamePrecedence: true}],
+      'no-mixed-operators': ['error', { allowSamePrecedence: true }],
       'no-multi-assign': ['off'],
       'no-param-reassign': ['off'],
       'no-path-concat': ['off'],
       'no-plusplus': ['off'],
       'no-prototype-builtins': ['off'],
-      'no-restricted-syntax': ['error', 'ForInStatement', 'LabeledStatement', 'WithStatement'],
+      'no-restricted-syntax': [
+        'error',
+        'ForInStatement',
+        'LabeledStatement',
+        'WithStatement',
+      ],
       'no-return-assign': ['off'],
-      'no-trailing-spaces': ['error', {skipBlankLines: true}],
-      'no-underscore-dangle': ['off', {allowAfterThis: true, allowAfterSuper: true}],
-      'no-unused-vars': ['error', {vars: 'all', args: 'none', caughtErrors: 'none', ignoreRestSiblings: true}],
+      'no-trailing-spaces': ['error', { skipBlankLines: true }],
+      'no-underscore-dangle': [
+        'off',
+        { allowAfterThis: true, allowAfterSuper: true },
+      ],
+      'no-unused-vars': [
+        'error',
+        {
+          vars: 'all',
+          args: 'none',
+          caughtErrors: 'none',
+          ignoreRestSiblings: true,
+        },
+      ],
       // The codebase intentionally uses explicit .js/.json extensions in require() paths.
       'import/extensions': 'off',
-      'no-use-before-define': ['error', {variables: false, classes: false, functions: false}],
-      'n/no-unsupported-features/es-syntax': ['error', {version: '>=10.0.0', ignores: []}],
+      'no-use-before-define': [
+        'error',
+        { variables: false, classes: false, functions: false },
+      ],
+      'n/no-unsupported-features/es-syntax': [
+        'error',
+        { version: '>=10.0.0', ignores: [] },
+      ],
       'n/process-exit-as-throw': ['off'],
       'object-curly-spacing': ['error', 'never'],
-      'object-property-newline': ['off', {allowMultiplePropertiesPerLine: true}],
-      'prefer-destructuring': ['warn', {array: false, object: true}],
+      'object-property-newline': [
+        'off',
+        { allowMultiplePropertiesPerLine: true },
+      ],
+      'prefer-destructuring': ['warn', { array: false, object: true }],
       'prefer-object-spread': ['off'],
       'prefer-rest-params': ['off'],
       quotes: ['error', 'single'],
       semi: ['error', 'always'],
       'space-before-function-paren': [
         'error',
-        {anonymous: 'never', named: 'never', asyncArrow: 'always'},
+        { anonymous: 'never', named: 'never', asyncArrow: 'always' },
       ],
       strict: ['off'],
     },
@@ -90,7 +125,7 @@ module.exports = [
     rules: {
       'no-console': 'off',
       'n/no-process-exit': 'off',
-      'import/no-extraneous-dependencies': ['error', {devDependencies: true}],
+      'import/no-extraneous-dependencies': ['error', { devDependencies: true }],
       'no-shadow': 'off',
     },
   },
@@ -115,7 +150,7 @@ module.exports = [
       'object-property-newline': 'off',
       'prefer-object-spread': 'off',
       'no-underscore-dangle': 'off',
-      'import/no-extraneous-dependencies': ['error', {devDependencies: true}],
+      'import/no-extraneous-dependencies': ['error', { devDependencies: true }],
     },
   },
 
@@ -131,7 +166,7 @@ module.exports = [
       'spaced-comment': 'off',
       'n/no-process-exit': 'off',
       'n/no-unpublished-require': 'off',
-      'import/no-extraneous-dependencies': ['error', {devDependencies: true}],
+      'import/no-extraneous-dependencies': ['error', { devDependencies: true }],
     },
   },
 
@@ -139,7 +174,7 @@ module.exports = [
   {
     files: ['eslint.config.js', 'benchmark.js'],
     rules: {
-      'import/no-extraneous-dependencies': ['error', {devDependencies: true}],
+      'import/no-extraneous-dependencies': ['error', { devDependencies: true }],
       'n/no-process-exit': 'off',
     },
   },
@@ -153,4 +188,4 @@ module.exports = [
       'n/no-missing-require': 'off',
     },
   },
-];
+]

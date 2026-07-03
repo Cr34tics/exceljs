@@ -1,17 +1,17 @@
-const testXformHelper = require('../../test-xform-helper');
+const testXformHelper = require('../../test-xform-helper')
 
-const DatabarExtXform = verquire('xlsx/xform/sheet/cf-ext/databar-ext-xform');
+const DatabarExtXform = verquire('xlsx/xform/sheet/cf-ext/databar-ext-xform')
 
 const expectations = [
   {
     title: 'Default Set',
     create() {
-      return new DatabarExtXform();
+      return new DatabarExtXform()
     },
     preparedModel: {
       cfvo: [
-        {type: 'num', value: 5},
-        {type: 'num', value: 20},
+        { type: 'num', value: 5 },
+        { type: 'num', value: 20 },
       ],
     },
     xml: `
@@ -30,8 +30,8 @@ const expectations = [
       axisPosition: 'auto',
       direction: 'leftToRight',
       cfvo: [
-        {type: 'num', value: 5},
-        {type: 'num', value: 20},
+        { type: 'num', value: 5 },
+        { type: 'num', value: 20 },
       ],
     },
     tests: ['render', 'parse'],
@@ -39,7 +39,7 @@ const expectations = [
   {
     title: 'Non Default Set',
     create() {
-      return new DatabarExtXform();
+      return new DatabarExtXform()
     },
     preparedModel: {
       minLength: 5,
@@ -49,11 +49,11 @@ const expectations = [
       negativeBarColorSameAsPositive: false,
       negativeBarBorderColorSameAsPositive: false,
       axisPosition: 'middle',
-      borderColor: {argb: 'FFFF0000'},
-      negativeFillColor: {argb: 'FF00FF00'},
-      axisColor: {argb: 'FF0000FF'},
+      borderColor: { argb: 'FFFF0000' },
+      negativeFillColor: { argb: 'FF00FF00' },
+      axisColor: { argb: 'FF0000FF' },
       direction: 'rightToLeft',
-      cfvo: [{type: 'autoMin'}, {type: 'autoMax'}],
+      cfvo: [{ type: 'autoMin' }, { type: 'autoMax' }],
     },
     xml: `
       <x14:dataBar
@@ -74,12 +74,12 @@ const expectations = [
       </x14:dataBar>
     `,
     get parsedModel() {
-      return this.preparedModel;
+      return this.preparedModel
     },
     tests: ['render', 'parse'],
   },
-];
+]
 
 describe('DatabarExtXform', () => {
-  testXformHelper(expectations);
-});
+  testXformHelper(expectations)
+})

@@ -1,14 +1,14 @@
-const fs = require('fs');
+const fs = require('fs')
 
-const testXformHelper = require('../test-xform-helper');
+const testXformHelper = require('../test-xform-helper')
 
-const TableXform = verquire('xlsx/xform/table/table-xform');
+const TableXform = verquire('xlsx/xform/table/table-xform')
 
 const expectations = [
   {
     title: 'showing filter',
     create() {
-      return new TableXform();
+      return new TableXform()
     },
     initialModel: null,
     preparedModel: require('./data/table.1.1'),
@@ -16,8 +16,8 @@ const expectations = [
     parsedModel: require('./data/table.1.3'),
     tests: ['render', 'renderIn', 'parse'],
   },
-];
+]
 
 describe('TableXform', () => {
-  testXformHelper(expectations);
-});
+  testXformHelper(expectations)
+})

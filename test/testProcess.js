@@ -1,45 +1,45 @@
-const Excel = require('../excel');
+const Excel = require('../excel')
 
-const [, , inputFile, outputFile] = process.argv;
+const [, , inputFile, outputFile] = process.argv
 
-const wb = new Excel.Workbook();
+const wb = new Excel.Workbook()
 
-let passed = true;
-const assert = function(value, failMessage, passMessage) {
+let passed = true
+const assert = function (value, failMessage, passMessage) {
   if (!value) {
     if (failMessage) {
-      console.error(failMessage);
+      console.error(failMessage)
     }
-    passed = false;
+    passed = false
   } else if (passMessage) {
-    console.log(passMessage);
+    console.log(passMessage)
   }
-};
+}
 
 // assuming file created by testBookOut
 wb.xlsx
   .readFile(inputFile)
   .then(() => {
-    console.log('Loaded', inputFile);
+    console.log('Loaded', inputFile)
 
-    wb.eachSheet(sheet => {
-      console.log(sheet.name);
-    });
+    wb.eachSheet((sheet) => {
+      console.log(sheet.name)
+    })
 
-    const ws = wb.getWorksheet('Sheet1');
+    const ws = wb.getWorksheet('Sheet1')
 
-    assert(ws, 'Expected to find a worksheet called sheet1');
+    assert(ws, 'Expected to find a worksheet called sheet1')
 
-    ws.getCell('B1').value = new Date();
-    ws.getCell('B1').numFmt = 'hh:mm:ss';
+    ws.getCell('B1').value = new Date()
+    ws.getCell('B1').numFmt = 'hh:mm:ss'
 
-    ws.addRow([1, 'hello']);
-    return wb.xlsx.writeFile(outputFile);
+    ws.addRow([1, 'hello'])
+    return wb.xlsx.writeFile(outputFile)
   })
   .then(() => {
-    assert(passed, 'Something went wrong', 'All tests passed!');
+    assert(passed, 'Something went wrong', 'All tests passed!')
   })
-  .catch(error => {
-    console.error(error.message);
-    console.error(error.stack);
-  });
+  .catch((error) => {
+    console.error(error.message)
+    console.error(error.stack)
+  })

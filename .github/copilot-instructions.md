@@ -40,46 +40,55 @@ index.d.ts      # Public TypeScript type definitions
 ## Development Workflow
 
 ### Install dependencies
+
 ```bash
 corepack enable   # once, to activate the pinned Yarn version
 yarn install
 ```
 
 ### Build (required before running the full test suite or browser tests)
+
 ```bash
 yarn build
 ```
+
 This runs `node scripts/build.js`, which uses esbuild to:
+
 1. Bundle the browser UMD builds `dist/exceljs.js` / `dist/exceljs.min.js` (plus `.bare` variants)
 2. Emit the CommonJS build under `dist/cjs/`
 
 ### Lint
+
 ```bash
 yarn lint
 ```
+
 Auto-fix formatting:
+
 ```bash
 yarn lint:fix
 ```
 
 ### Run tests
 
-| Command | What it runs |
-|---|---|
-| `yarn test:unit` | Unit tests only (fast, no build needed) |
-| `yarn test:integration` | Integration tests |
-| `yarn test:end-to-end` | End-to-end tests |
-| `yarn test:browser` | Browser tests (builds, then runs headless Chromium via Playwright) |
-| `yarn test:typescript` | TypeScript type-checking tests |
-| `yarn test:full` | Build + unit + integration + end-to-end + browser |
-| `yarn test` | Alias for `test:full` |
+| Command                 | What it runs                                                       |
+| ----------------------- | ------------------------------------------------------------------ |
+| `yarn test:unit`        | Unit tests only (fast, no build needed)                            |
+| `yarn test:integration` | Integration tests                                                  |
+| `yarn test:end-to-end`  | End-to-end tests                                                   |
+| `yarn test:browser`     | Browser tests (builds, then runs headless Chromium via Playwright) |
+| `yarn test:typescript`  | TypeScript type-checking tests                                     |
+| `yarn test:full`        | Build + unit + integration + end-to-end + browser                  |
+| `yarn test`             | Alias for `test:full`                                              |
 
 For most feature/bug work the fastest meaningful cycle is:
+
 ```bash
 yarn test:unit && yarn test:integration
 ```
 
 ### Benchmark
+
 ```bash
 yarn benchmark
 ```
@@ -96,10 +105,13 @@ yarn benchmark
 ## Key Architectural Patterns
 
 ### Document Model (`lib/doc/`)
+
 The public API surface. `Workbook` owns an array of `Worksheet` objects; each worksheet owns `Row` and `Column` objects; each row owns `Cell` objects. Model objects expose a plain `.model` property (a plain JS object) that is the canonical serialization format described in `MODEL.md`.
 
 ### XFORM Pattern (`lib/xlsx/xform/`)
+
 Each class in this directory is an XML transformer responsible for reading or writing one XLSX XML element. They follow a consistent interface:
+
 - `render(xmlStream, model)` – serialize a model to XML
 - `parseOpen(node)` / `parseText(text)` / `parseClose(tag)` – SAX-style parse callbacks
 - `reconcile(model, context)` – post-parse reconciliation pass
@@ -107,14 +119,17 @@ Each class in this directory is an XML transformer responsible for reading or wr
 When adding support for a new XLSX feature, create or extend the appropriate xform class.
 
 ### Streaming API (`lib/stream/`)
+
 `stream/xlsx/workbook-writer.js` and `stream/xlsx/workbook-reader.js` provide memory-efficient streaming variants. Changes to the streaming API should be mirrored in the document API where applicable.
 
 ### TypeScript Definitions (`index.d.ts`)
+
 All public API changes must be reflected here. TypeScript tests live in `spec/typescript/`.
 
 ## Making Changes
 
 ### Adding a feature or fixing a bug
+
 1. Make changes in `lib/` (document model and/or xform layer)
 2. Update `index.d.ts` if the public API changes
 3. Add or update tests in `spec/unit/` and/or `spec/integration/`
@@ -122,11 +137,13 @@ All public API changes must be reflected here. TypeScript tests live in `spec/ty
 5. Run `yarn test:unit && yarn test:integration` to verify
 
 ### Changing XLSX read/write behaviour
+
 - Edit the relevant xform in `lib/xlsx/xform/`
 - Add a fixture or expected output in `spec/integration/data/` or `spec/unit/xlsx/xform/`
 - Run integration tests: `yarn test:integration`
 
 ### Updating TypeScript types only
+
 - Edit `index.d.ts`
 - Run `yarn test:typescript` (uses `ts-node`)
 

@@ -1,12 +1,12 @@
-const testXformHelper = require('../../test-xform-helper');
+const testXformHelper = require('../../test-xform-helper')
 
-const CfRuleExtXform = verquire('xlsx/xform/sheet/cf-ext/cf-rule-ext-xform');
+const CfRuleExtXform = verquire('xlsx/xform/sheet/cf-ext/cf-rule-ext-xform')
 
 const expectations = [
   {
     title: 'Icon Set',
     create() {
-      return new CfRuleExtXform();
+      return new CfRuleExtXform()
     },
     preparedModel: {
       type: 'iconSet',
@@ -14,9 +14,9 @@ const expectations = [
       x14Id: 'x14-id',
       iconSet: '3Triangles',
       cfvo: [
-        {type: 'percent', value: 0},
-        {type: 'percent', value: 33},
-        {type: 'percent', value: 67},
+        { type: 'percent', value: 0 },
+        { type: 'percent', value: 33 },
+        { type: 'percent', value: 67 },
       ],
     },
     xml: `
@@ -36,9 +36,9 @@ const expectations = [
       reverse: false,
       showValue: true,
       cfvo: [
-        {type: 'percent', value: 0},
-        {type: 'percent', value: 33},
-        {type: 'percent', value: 67},
+        { type: 'percent', value: 0 },
+        { type: 'percent', value: 33 },
+        { type: 'percent', value: 67 },
       ],
     },
     tests: ['render', 'parse'],
@@ -46,14 +46,14 @@ const expectations = [
   {
     title: 'Databar',
     create() {
-      return new CfRuleExtXform();
+      return new CfRuleExtXform()
     },
     preparedModel: {
       type: 'dataBar',
       x14Id: 'x14-id',
       cfvo: [
-        {type: 'num', value: 5},
-        {type: 'num', value: 20},
+        { type: 'num', value: 5 },
+        { type: 'num', value: 20 },
       ],
     },
     xml: `
@@ -78,14 +78,14 @@ const expectations = [
       axisPosition: 'auto',
       direction: 'leftToRight',
       cfvo: [
-        {type: 'num', value: 5},
-        {type: 'num', value: 20},
+        { type: 'num', value: 5 },
+        { type: 'num', value: 20 },
       ],
     },
     tests: ['render', 'parse'],
   },
-];
+]
 
 describe('CfRuleExtXform', () => {
-  testXformHelper(expectations);
-});
+  testXformHelper(expectations)
+})

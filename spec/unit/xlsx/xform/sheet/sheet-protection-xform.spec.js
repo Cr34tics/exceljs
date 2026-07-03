@@ -1,14 +1,12 @@
-const testXformHelper = require('../test-xform-helper');
+const testXformHelper = require('../test-xform-helper')
 
-const SheetProtectionXform = verquire(
-  'xlsx/xform/sheet/sheet-protection-xform'
-);
+const SheetProtectionXform = verquire('xlsx/xform/sheet/sheet-protection-xform')
 
 const expectations = [
   {
     title: 'Unprotected (Empty)',
     create() {
-      return new SheetProtectionXform();
+      return new SheetProtectionXform()
     },
     preparedModel: {},
     xml: '',
@@ -18,7 +16,7 @@ const expectations = [
   {
     title: 'Protected (Default)',
     create() {
-      return new SheetProtectionXform();
+      return new SheetProtectionXform()
     },
     preparedModel: {
       algorithmName: 'SHA-512',
@@ -30,8 +28,7 @@ const expectations = [
       objects: false,
       scenarios: false,
     },
-    xml:
-      '<sheetProtection algorithmName="SHA-512" hashValue="RHtx1KpAYT7nBzGCTInkHrbf2wTZxP3BT4Eo8PBHPTM4KfKArJTluFvizDvo6GnBCOO6JJu7qwKvMqnKHs7dcw==" saltValue="6tC6yotbNa8JaMaDvbUgxw==" spinCount="100000" sheet="1" objects="1" scenarios="1"/>',
+    xml: '<sheetProtection algorithmName="SHA-512" hashValue="RHtx1KpAYT7nBzGCTInkHrbf2wTZxP3BT4Eo8PBHPTM4KfKArJTluFvizDvo6GnBCOO6JJu7qwKvMqnKHs7dcw==" saltValue="6tC6yotbNa8JaMaDvbUgxw==" spinCount="100000" sheet="1" objects="1" scenarios="1"/>',
     parsedModel: {
       algorithmName: 'SHA-512',
       hashValue:
@@ -47,7 +44,7 @@ const expectations = [
   {
     title: 'Unprotected (All false)',
     create() {
-      return new SheetProtectionXform();
+      return new SheetProtectionXform()
     },
     preparedModel: {
       selectLockedCells: false,
@@ -63,7 +60,7 @@ const expectations = [
   {
     title: 'Protected (All false)',
     create() {
-      return new SheetProtectionXform();
+      return new SheetProtectionXform()
     },
     preparedModel: {
       algorithmName: 'SHA-512',
@@ -75,8 +72,7 @@ const expectations = [
       selectLockedCells: false,
       selectUnlockedCells: false,
     },
-    xml:
-      '<sheetProtection algorithmName="SHA-512" hashValue="RHtx1KpAYT7nBzGCTInkHrbf2wTZxP3BT4Eo8PBHPTM4KfKArJTluFvizDvo6GnBCOO6JJu7qwKvMqnKHs7dcw==" saltValue="6tC6yotbNa8JaMaDvbUgxw==" spinCount="100000" sheet="1" selectLockedCells="1" selectUnlockedCells="1"/>',
+    xml: '<sheetProtection algorithmName="SHA-512" hashValue="RHtx1KpAYT7nBzGCTInkHrbf2wTZxP3BT4Eo8PBHPTM4KfKArJTluFvizDvo6GnBCOO6JJu7qwKvMqnKHs7dcw==" saltValue="6tC6yotbNa8JaMaDvbUgxw==" spinCount="100000" sheet="1" selectLockedCells="1" selectUnlockedCells="1"/>',
     parsedModel: {
       algorithmName: 'SHA-512',
       hashValue:
@@ -89,8 +85,8 @@ const expectations = [
     },
     tests: ['render', 'renderIn', 'parse'],
   },
-];
+]
 
 describe('SheetProtectionXform', () => {
-  testXformHelper(expectations);
-});
+  testXformHelper(expectations)
+})

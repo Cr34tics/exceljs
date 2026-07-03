@@ -1,16 +1,20 @@
-const testXformHelper = require('../../test-xform-helper');
+const testXformHelper = require('../../test-xform-helper')
 
-const ColorScaleXform = verquire('xlsx/xform/sheet/cf/color-scale-xform');
+const ColorScaleXform = verquire('xlsx/xform/sheet/cf/color-scale-xform')
 
 const expectations = [
   {
     title: 'Colour Scale',
     create() {
-      return new ColorScaleXform();
+      return new ColorScaleXform()
     },
     preparedModel: {
-      cfvo: [{type: 'min'}, {type: 'percentile', value: 50}, {type: 'max'}],
-      color: [{argb: 'FFFF0000'}, {argb: 'FF00FF00'}, {argb: 'FF0000FF'}],
+      cfvo: [
+        { type: 'min' },
+        { type: 'percentile', value: 50 },
+        { type: 'max' },
+      ],
+      color: [{ argb: 'FFFF0000' }, { argb: 'FF00FF00' }, { argb: 'FF0000FF' }],
     },
     xml: `
       <colorScale>
@@ -23,12 +27,12 @@ const expectations = [
       </colorScale>
     `,
     get parsedModel() {
-      return this.preparedModel;
+      return this.preparedModel
     },
     tests: ['render', 'parse'],
   },
-];
+]
 
 describe('ColorScaleXform', () => {
-  testXformHelper(expectations);
-});
+  testXformHelper(expectations)
+})

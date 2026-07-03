@@ -1,5 +1,5 @@
-const WorksheetWriter = verquire('stream/xlsx/worksheet-writer');
-const StreamBuf = verquire('utils/stream-buf');
+const WorksheetWriter = verquire('stream/xlsx/worksheet-writer')
+const StreamBuf = verquire('utils/stream-buf')
 
 describe('Workbook Writer', () => {
   it('generates valid xml even when there is no data', () =>
@@ -8,25 +8,25 @@ describe('Workbook Writer', () => {
     new Promise((resolve, reject) => {
       const mockWorkbook = {
         _openStream() {
-          return this.stream;
+          return this.stream
         },
         stream: new StreamBuf(),
-      };
+      }
       mockWorkbook.stream.on('finish', () => {
         try {
-          const xml = mockWorkbook.stream.read().toString();
-          expect(xml).xml.to.be.valid();
-          resolve();
+          const xml = mockWorkbook.stream.read().toString()
+          expect(xml).xml.to.be.valid()
+          resolve()
         } catch (error) {
-          reject(error);
+          reject(error)
         }
-      });
+      })
 
       const writer = new WorksheetWriter({
         id: 1,
         workbook: mockWorkbook,
-      });
+      })
 
-      writer.commit();
-    }));
-});
+      writer.commit()
+    }))
+})
