@@ -4,7 +4,7 @@
   "dependencyDashboard": true,
   "timezone": "Europe/Stockholm",
   "forkProcessing": "enabled",
-  "schedule": ["* * * * 5"],
+  "schedule": ["before 6am on friday"],
   "packageRules": [
     {
       "description": "One weekly PR (Fridays) for all non-major npm & GitHub Actions updates",
