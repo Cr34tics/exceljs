@@ -51,7 +51,7 @@ describe('Workbook', () => {
 
       return workbook.xlsx.writeFile(TEST_XLSX_FILEPATH).then(async () => {
         const buffer = await fsReadFileAsync(TEST_XLSX_FILEPATH)
-        const files = unzipSync(new Uint8Array(buffer))
+        const files = unzipSync(buffer)
         for (const filepath of PIVOT_TABLE_FILEPATHS) {
           expect(files[filepath]).to.not.be.undefined()
         }
@@ -68,7 +68,7 @@ describe('Workbook', () => {
 
       return workbook.xlsx.writeFile(TEST_XLSX_FILEPATH).then(async () => {
         const buffer = await fsReadFileAsync(TEST_XLSX_FILEPATH)
-        const files = unzipSync(new Uint8Array(buffer))
+        const files = unzipSync(buffer)
         for (const filepath of PIVOT_TABLE_FILEPATHS) {
           expect(files[filepath]).to.be.undefined()
         }
