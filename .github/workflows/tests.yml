@@ -33,7 +33,12 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
       - name: Enable Corepack
-        run: corepack enable
+        # Node 26 bundles a Corepack that fails to shim over the runner's global
+        # Yarn 1.x on Windows ("current global version of Yarn is 1.22.22").
+        # Install the latest Corepack so its yarn shim reliably takes precedence.
+        run: |
+          npm install -g corepack@latest
+          corepack enable
       - name: Cache Yarn
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
@@ -45,13 +50,15 @@ jobs:
       - run: yarn test:unit
       - run: yarn test:integration
       - run: yarn test:end-to-end
-      # The browser bundle is an OS-agnostic artifact; validate it in headless
-      # Chromium on Linux only. Downloading the Playwright browser on macOS and
-      # Windows runners is slow and prone to CDN-stall hangs.
+      # The browser bundle is an OS- and Node-version-agnostic artifact, so
+      # validate it once: headless Chromium on Linux with a single Node version.
+      # Downloading the Playwright browser is slow and prone to CDN-stall hangs
+      # (seen on macOS/Windows, and under Node 26 on Linux too), so we keep it off
+      # the rest of the matrix.
       - run: yarn playwright install chromium
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && matrix.node-version == '24.x'
       - run: yarn test:browser:run
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && matrix.node-version == '24.x'
 
   benchmark:
     timeout-minutes: 15
@@ -64,7 +71,12 @@ jobs:
         with:
           node-version: 24
       - name: Enable Corepack
-        run: corepack enable
+        # Node 26 bundles a Corepack that fails to shim over the runner's global
+        # Yarn 1.x on Windows ("current global version of Yarn is 1.22.22").
+        # Install the latest Corepack so its yarn shim reliably takes precedence.
+        run: |
+          npm install -g corepack@latest
+          corepack enable
       - name: Cache Yarn
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
@@ -85,7 +97,12 @@ jobs:
         with:
           node-version: 24
       - name: Enable Corepack
-        run: corepack enable
+        # Node 26 bundles a Corepack that fails to shim over the runner's global
+        # Yarn 1.x on Windows ("current global version of Yarn is 1.22.22").
+        # Install the latest Corepack so its yarn shim reliably takes precedence.
+        run: |
+          npm install -g corepack@latest
+          corepack enable
       - name: Cache Yarn
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
@@ -106,7 +123,12 @@ jobs:
         with:
           node-version: 24
       - name: Enable Corepack
-        run: corepack enable
+        # Node 26 bundles a Corepack that fails to shim over the runner's global
+        # Yarn 1.x on Windows ("current global version of Yarn is 1.22.22").
+        # Install the latest Corepack so its yarn shim reliably takes precedence.
+        run: |
+          npm install -g corepack@latest
+          corepack enable
       - name: Cache Yarn
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
