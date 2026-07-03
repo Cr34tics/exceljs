@@ -46,7 +46,7 @@
     "test:manual": "node spec/manual/app.js",
     "test:typescript": "mocha -r ts-node/register spec/typescript/**/*.spec.ts",
     "clean-build": "yarn clean && yarn build",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
     "lint:staged": "lint-staged",
     "clean": "rm -rf build/ && rm -rf dist",
