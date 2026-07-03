@@ -3,13 +3,26 @@ name: Publish Package to GitHub Packages
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g. 5.0.0). Defaults to the version in package.json.'
+        required: false
+        type: string
+
+concurrency:
+  group: publish-${{ github.event.release.tag_name || inputs.version || github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
+    # Least privilege: this job only reads the repo and writes the package.
     permissions:
       contents: read
       packages: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
@@ -22,7 +35,81 @@ jobs:
         run: yarn install --immutable
       - name: Build package
         run: yarn build
+      # The published version is derived from the release tag (the source of
+      # truth for a release) so a forgotten package.json bump can never silently
+      # re-publish the previous version again. Falls back to the workflow_dispatch
+      # input, then to whatever is already in package.json.
+      - name: Resolve version to publish
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          else
+            VERSION="${{ inputs.version }}"
+          fi
+          VERSION="${VERSION#v}"
+          if [ -z "$VERSION" ]; then
+            VERSION="$(node -p "require('./package.json').version")"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Publishing @cr34tics/exceljs@$VERSION"
+      - name: Set package version
+        # npm pkg set only rewrites the version field; it does NOT run the
+        # preversion/postversion lifecycle hooks (which build, test and git push).
+        run: npm pkg set version="${{ steps.version.outputs.version }}"
       - name: Publish package
         run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Keep the committed package.json in sync with what was just published, so a
+  # release cut without a prior version bump doesn't leave master behind. Split
+  # into its own job so the elevated write permissions never apply to the
+  # build/publish job. Opens a PR — it never pushes to master directly.
+  sync-version:
+    needs: publish
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: master
+          # Full history (and remote-tracking refs) so the sync branch can be
+          # (re)created from master and --force-with-lease has a ref to lease
+          # against on re-runs.
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          # Pin Node/npm (same pin as the publish job) so `npm pkg set` doesn't
+          # depend on whatever the ubuntu-latest image happens to ship.
+          node-version: '24.x'
+      - name: Open PR to sync package.json version to master
+        env:
+          VERSION: ${{ needs.publish.outputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="chore/sync-version-${VERSION}"
+          git checkout -B "$BRANCH"
+          npm pkg set version="$VERSION"
+          if git diff --quiet -- package.json; then
+            echo "master already at $VERSION; nothing to sync."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(release): sync package.json to $VERSION" -- package.json
+          git push --force-with-lease origin "HEAD:$BRANCH"
+          # Idempotent: any existing PR for this branch (open, closed or merged)
+          # means there is nothing new to open — the branch has just been updated.
+          if gh pr view "$BRANCH" >/dev/null 2>&1; then
+            echo "A PR already exists for $BRANCH; updated its branch."
+          else
+            gh pr create \
+              --base master \
+              --head "$BRANCH" \
+              --title "chore(release): sync package.json to $VERSION" \
+              --body "Automated: \`$VERSION\` was just published to GitHub Packages by the release workflow. This bumps the committed \`package.json\` version to match. Safe to merge."
+          fi
