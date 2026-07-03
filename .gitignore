@@ -64,4 +64,12 @@ _SpecRunner.html
 
 # Ignore xlsx files generated during testing
 *.xlsx
-enpm-lock.yaml
+
+# Yarn Berry (keep yarn.lock and .yarn/releases tracked; ignore caches/state)
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.pnp.*

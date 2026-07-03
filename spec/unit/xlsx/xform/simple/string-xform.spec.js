@@ -1,12 +1,12 @@
-const testXformHelper = require('../test-xform-helper');
+const testXformHelper = require('../test-xform-helper')
 
-const StringXform = verquire('xlsx/xform/simple/string-xform');
+const StringXform = verquire('xlsx/xform/simple/string-xform')
 
 const expectations = [
   {
     title: 'hello',
     create() {
-      return new StringXform({tag: 'string', attr: 'val'});
+      return new StringXform({ tag: 'string', attr: 'val' })
     },
     preparedModel: 'Hello, World!',
     xml: '<string val="Hello, World!"/>',
@@ -16,7 +16,7 @@ const expectations = [
   {
     title: 'empty',
     create() {
-      return new StringXform({tag: 'string', attr: 'val'});
+      return new StringXform({ tag: 'string', attr: 'val' })
     },
     preparedModel: '',
     xml: '<string val=""/>',
@@ -26,14 +26,14 @@ const expectations = [
   {
     title: 'undefined',
     create() {
-      return new StringXform({tag: 'string', attr: 'val'});
+      return new StringXform({ tag: 'string', attr: 'val' })
     },
     preparedModel: undefined,
     xml: '',
     tests: ['render', 'renderIn'],
   },
-];
+]
 
 describe('StringXform', () => {
-  testXformHelper(expectations);
-});
+  testXformHelper(expectations)
+})

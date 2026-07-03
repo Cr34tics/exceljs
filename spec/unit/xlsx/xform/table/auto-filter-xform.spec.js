@@ -1,27 +1,27 @@
-const testXformHelper = require('../test-xform-helper');
+const testXformHelper = require('../test-xform-helper')
 
-const AutoFilterXform = verquire('xlsx/xform/table/auto-filter-xform');
+const AutoFilterXform = verquire('xlsx/xform/table/auto-filter-xform')
 
 const expectations = [
   {
     title: 'showing filter',
     create() {
-      return new AutoFilterXform();
+      return new AutoFilterXform()
     },
     initialModel: {
       autoFilterRef: 'A1:B10',
       columns: [
-        {filterButton: false},
-        {filterButton: true},
-        {filterButton: true},
+        { filterButton: false },
+        { filterButton: true },
+        { filterButton: true },
       ],
     },
     preparedModel: {
       autoFilterRef: 'A1:B10',
       columns: [
-        {colId: '0', filterButton: false},
-        {colId: '1', filterButton: true},
-        {colId: '2', filterButton: true},
+        { colId: '0', filterButton: false },
+        { colId: '1', filterButton: true },
+        { colId: '2', filterButton: true },
       ],
     },
     xml:
@@ -31,12 +31,12 @@ const expectations = [
       '<filterColumn colId="2" hiddenButton="0" />' +
       '</autoFilter>',
     get parsedModel() {
-      return this.initialModel;
+      return this.initialModel
     },
     tests: ['prepare', 'render', 'renderIn', 'parse'],
   },
-];
+]
 
 describe('AutoFilterXform', () => {
-  testXformHelper(expectations);
-});
+  testXformHelper(expectations)
+})

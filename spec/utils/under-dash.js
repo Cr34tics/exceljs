@@ -2,48 +2,48 @@ const _ = Object.assign(
   {
     get: function get(obj, path, dflt) {
       if (typeof path === 'string') {
-        path = path.split('.');
+        path = path.split('.')
       }
       while (obj && path.length) {
-        obj = obj[path.shift()];
+        obj = obj[path.shift()]
       }
-      return obj !== undefined ? obj : dflt;
+      return obj !== undefined ? obj : dflt
     },
 
     has: function has(obj, path) {
-      const dummy = {};
-      return _.get(obj, path, dummy) !== dummy;
+      const dummy = {}
+      return _.get(obj, path, dummy) !== dummy
     },
 
     cloneDeep: function cloneDeep(obj, preserveUndefined) {
       if (preserveUndefined === undefined) {
-        preserveUndefined = true;
+        preserveUndefined = true
       }
-      let clone;
+      let clone
       if (obj === null) {
-        return null;
+        return null
       }
       if (obj instanceof Date) {
-        return obj;
+        return obj
       }
       if (obj instanceof Array) {
-        clone = [];
+        clone = []
       } else if (typeof obj === 'object') {
-        clone = {};
+        clone = {}
       } else {
-        return obj;
+        return obj
       }
       _.each(obj, (value, name) => {
         if (value !== undefined) {
-          clone[name] = cloneDeep(value, preserveUndefined);
+          clone[name] = cloneDeep(value, preserveUndefined)
         } else if (preserveUndefined) {
-          clone[name] = undefined;
+          clone[name] = undefined
         }
-      });
-      return clone;
+      })
+      return clone
     },
   },
-  verquire('utils/under-dash')
-);
+  verquire('utils/under-dash'),
+)
 
-module.exports = _;
+module.exports = _

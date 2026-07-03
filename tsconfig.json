@@ -3,12 +3,7 @@
     "module": "commonjs",
     "target": "es2020",
     "sourceMap": true,
-    "types": [
-      "node",
-      "mocha"
-    ]
+    "types": ["node", "mocha"]
   },
-  "exclude": [
-    "node_modules"
-  ]
+  "exclude": ["node_modules"]
 }

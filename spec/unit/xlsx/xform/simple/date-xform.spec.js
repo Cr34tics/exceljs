@@ -1,12 +1,12 @@
-const testXformHelper = require('../test-xform-helper');
+const testXformHelper = require('../test-xform-helper')
 
-const DateXform = verquire('xlsx/xform/simple/date-xform');
+const DateXform = verquire('xlsx/xform/simple/date-xform')
 
 const expectations = [
   {
     title: 'date',
     create() {
-      return new DateXform({tag: 'date', attr: 'val'});
+      return new DateXform({ tag: 'date', attr: 'val' })
     },
     preparedModel: new Date('2016-07-13T00:00:00Z'),
     xml: '<date val="2016-07-13T00:00:00.000Z"/>',
@@ -20,12 +20,12 @@ const expectations = [
         tag: 'date',
         attr: 'val',
         format(dt) {
-          return dt.toISOString().split('T')[0];
+          return dt.toISOString().split('T')[0]
         },
         parse(value) {
-          return new Date(value.replace('13', '14'));
+          return new Date(value.replace('13', '14'))
         },
-      });
+      })
     },
     preparedModel: new Date('2016-07-13T00:00:00Z'),
     xml: '<date val="2016-07-13"/>',
@@ -35,7 +35,7 @@ const expectations = [
   {
     title: 'undefined',
     create() {
-      return new DateXform({tag: 'date', attr: 'val'});
+      return new DateXform({ tag: 'date', attr: 'val' })
     },
     preparedModel: undefined,
     xml: '',
@@ -44,14 +44,14 @@ const expectations = [
   {
     title: 'invalid date',
     create() {
-      return new DateXform({tag: 'date', attr: undefined});
+      return new DateXform({ tag: 'date', attr: undefined })
     },
     preparedModel: new Date(undefined),
     xml: '<date />',
     tests: ['render'],
   },
-];
+]
 
 describe('DateXform', () => {
-  testXformHelper(expectations);
-});
+  testXformHelper(expectations)
+})

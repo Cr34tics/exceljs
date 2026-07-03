@@ -4,14 +4,12 @@
 //
 // Last updated: 2023-10-19
 // --------------------------------------------------
-/* eslint-disable */
-
 function main(filepath) {
-  const Excel = require('../lib/exceljs.nodejs.js');
+  const Excel = require('../lib/exceljs.nodejs.js')
 
-  const workbook = new Excel.Workbook();
+  const workbook = new Excel.Workbook()
 
-  const worksheet1 = workbook.addWorksheet('Sheet1');
+  const worksheet1 = workbook.addWorksheet('Sheet1')
   worksheet1.addRows([
     ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'],
     ['a1', 'b1', 'c1', 'd1', 'e1', 'f1', 4, 5],
@@ -20,9 +18,9 @@ function main(filepath) {
     ['a2', 'b2', 'c2', 'd2', 'e2', 'f2', 24, 35],
     ['a3', 'b1', 'c3', 'd1', 'e3', 'f2', 34, 45],
     ['a3', 'b2', 'c3', 'd2', 'e3', 'f2', 44, 45],
-  ]);
+  ])
 
-  const worksheet2 = workbook.addWorksheet('Sheet2');
+  const worksheet2 = workbook.addWorksheet('Sheet2')
   worksheet2.addPivotTable({
     // Source of data: the entire sheet range is taken;
     // akin to `worksheet1.getSheetValues()`.
@@ -33,22 +31,22 @@ function main(filepath) {
     columns: ['C', 'D'],
     values: ['H'], // only 1 item possible for now
     metric: 'sum', // only 'sum' possible for now
-  });
+  })
 
-  save(workbook, filepath);
+  save(workbook, filepath)
 }
 
 function save(workbook, filepath) {
-  const HrStopwatch = require('./utils/hr-stopwatch');
-  const stopwatch = new HrStopwatch();
-  stopwatch.start();
+  const HrStopwatch = require('./utils/hr-stopwatch')
+  const stopwatch = new HrStopwatch()
+  stopwatch.start()
 
   workbook.xlsx.writeFile(filepath).then(() => {
-    const microseconds = stopwatch.microseconds;
-    console.log('Done.');
-    console.log('Time taken:', microseconds);
-  });
+    const microseconds = stopwatch.microseconds
+    console.log('Done.')
+    console.log('Time taken:', microseconds)
+  })
 }
 
-const [, , filepath] = process.argv;
-main(filepath);
+const [, , filepath] = process.argv
+main(filepath)

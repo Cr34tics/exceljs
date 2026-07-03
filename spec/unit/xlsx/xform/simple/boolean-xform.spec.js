@@ -1,16 +1,16 @@
-const testXformHelper = require('../test-xform-helper');
+const testXformHelper = require('../test-xform-helper')
 
-const BooleanXform = verquire('xlsx/xform/simple/boolean-xform');
+const BooleanXform = verquire('xlsx/xform/simple/boolean-xform')
 
 const expectations = [
   {
     title: 'true',
     create() {
-      return new BooleanXform({tag: 'boolean', attr: 'val'});
+      return new BooleanXform({ tag: 'boolean', attr: 'val' })
     },
     preparedModel: true,
     get parsedModel() {
-      return this.preparedModel;
+      return this.preparedModel
     },
     xml: '<boolean/>',
     tests: ['render', 'renderIn', 'parse'],
@@ -18,7 +18,7 @@ const expectations = [
   {
     title: 'false',
     create() {
-      return new BooleanXform({tag: 'boolean', attr: 'val'});
+      return new BooleanXform({ tag: 'boolean', attr: 'val' })
     },
     preparedModel: false,
     xml: '',
@@ -27,14 +27,14 @@ const expectations = [
   {
     title: 'undefined',
     create() {
-      return new BooleanXform({tag: 'boolean', attr: 'val'});
+      return new BooleanXform({ tag: 'boolean', attr: 'val' })
     },
     preparedModel: undefined,
     xml: '',
     tests: ['render', 'renderIn'],
   },
-];
+]
 
 describe('BooleanXform', () => {
-  testXformHelper(expectations);
-});
+  testXformHelper(expectations)
+})

@@ -1,26 +1,26 @@
-const utils = require('./utils/utils');
-const HrStopwatch = require('./utils/hr-stopwatch');
+const utils = require('./utils/utils')
+const HrStopwatch = require('./utils/hr-stopwatch')
 
-const StringBuf = require('../lib/utils/string-buf.js');
+const StringBuf = require('../lib/utils/string-buf.js')
 
-const SIZE = 1048576;
+const SIZE = 1048576
 
 function testWrite(results) {
-  const a = [];
+  const a = []
 
   function test(size) {
-    return function() {
-      console.log(`Write: ${size}`);
-      const text = utils.randomName(size);
-      const sb = new StringBuf({size: SIZE + 10});
-      const sw = new HrStopwatch();
-      sw.start();
+    return function () {
+      console.log(`Write: ${size}`)
+      const text = utils.randomName(size)
+      const sb = new StringBuf({ size: SIZE + 10 })
+      const sw = new HrStopwatch()
+      sw.start()
       while (sb.length < SIZE) {
-        sb.addText(text);
+        sb.addText(text)
       }
-      sw.stop();
-      a.push(`${size}:${Math.round(sw.span * 1000)}`);
-    };
+      sw.stop()
+      a.push(`${size}:${Math.round(sw.span * 1000)}`)
+    }
   }
 
   return Promise.resolve()
@@ -39,27 +39,27 @@ function testWrite(results) {
     .then(test(64))
     .delay(1000)
     .then(() => {
-      results.write = a.join(', ');
-      return results;
-    });
+      results.write = a.join(', ')
+      return results
+    })
 }
 
 function testGrow(results) {
-  const a = [];
+  const a = []
 
   function test(size) {
-    return function() {
-      console.log(`Grow: ${size}`);
-      const text = utils.randomName(size);
-      const sb = new StringBuf({size: 8});
-      const sw = new HrStopwatch();
-      sw.start();
+    return function () {
+      console.log(`Grow: ${size}`)
+      const text = utils.randomName(size)
+      const sb = new StringBuf({ size: 8 })
+      const sw = new HrStopwatch()
+      sw.start()
       while (sb.length < SIZE) {
-        sb.addText(text);
+        sb.addText(text)
       }
-      sw.stop();
-      a.push(`${size}:${Math.round(sw.span * 1000)}`);
-    };
+      sw.stop()
+      a.push(`${size}:${Math.round(sw.span * 1000)}`)
+    }
   }
 
   return Promise.resolve()
@@ -78,15 +78,15 @@ function testGrow(results) {
     .then(test(64))
     .delay(1000)
     .then(() => {
-      results.grow = a.join(', ');
-      return results;
-    });
+      results.grow = a.join(', ')
+      return results
+    })
 }
 
-const results = {};
+const results = {}
 Promise.resolve(results)
   .then(testWrite)
   .then(testGrow)
-  .then(r => {
-    console.log(JSON.stringify(r, null, '  '));
-  });
+  .then((r) => {
+    console.log(JSON.stringify(r, null, '  '))
+  })

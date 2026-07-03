@@ -1,7 +1,7 @@
-const testXformHelper = require('./test-xform-helper');
+const testXformHelper = require('./test-xform-helper')
 
-const ListXform = verquire('xlsx/xform/list-xform');
-const IntegerXform = verquire('xlsx/xform/simple/integer-xform');
+const ListXform = verquire('xlsx/xform/list-xform')
+const IntegerXform = verquire('xlsx/xform/simple/integer-xform')
 
 const expectations = [
   {
@@ -9,12 +9,12 @@ const expectations = [
     create() {
       return new ListXform({
         tag: 'ints',
-        childXform: new IntegerXform({tag: 'int', attr: 'val'}),
-      });
+        childXform: new IntegerXform({ tag: 'int', attr: 'val' }),
+      })
     },
     preparedModel: [1, 2, 3],
     get parsedModel() {
-      return this.preparedModel;
+      return this.preparedModel
     },
     xml: '<ints><int val="1"/><int val="2"/><int val="3"/></ints>',
     tests: ['render', 'renderIn', 'parse'],
@@ -25,18 +25,18 @@ const expectations = [
       return new ListXform({
         tag: 'ints',
         count: true,
-        childXform: new IntegerXform({tag: 'int', attr: 'val'}),
-      });
+        childXform: new IntegerXform({ tag: 'int', attr: 'val' }),
+      })
     },
     preparedModel: [1, 2, 3],
     get parsedModel() {
-      return this.preparedModel;
+      return this.preparedModel
     },
     xml: '<ints count="3"><int val="1"/><int val="2"/><int val="3"/></ints>',
     tests: ['render', 'renderIn', 'parse'],
   },
-];
+]
 
 describe('ListXform', () => {
-  testXformHelper(expectations);
-});
+  testXformHelper(expectations)
+})

@@ -1,20 +1,20 @@
-'use strict';
+'use strict'
 
-const esbuild = require('esbuild');
-const fs = require('fs');
-const path = require('path');
+const esbuild = require('esbuild')
+const fs = require('fs')
+const path = require('path')
 
-const distDir = path.resolve(__dirname, '..', 'dist');
+const distDir = path.resolve(__dirname, '..', 'dist')
 
 // Clean and recreate dist directory to prevent stale artifacts
-fs.rmSync(distDir, {recursive: true, force: true});
-fs.mkdirSync(distDir, {recursive: true});
+fs.rmSync(distDir, { recursive: true, force: true })
+fs.mkdirSync(distDir, { recursive: true })
 
-const today = new Date();
-const dd = String(today.getDate()).padStart(2, '0');
-const mm = String(today.getMonth() + 1).padStart(2, '0');
-const yyyy = today.getFullYear();
-const banner = `/*! ExcelJS ${dd}-${mm}-${yyyy} */`;
+const today = new Date()
+const dd = String(today.getDate()).padStart(2, '0')
+const mm = String(today.getMonth() + 1).padStart(2, '0')
+const yyyy = today.getFullYear()
+const banner = `/*! ExcelJS ${dd}-${mm}-${yyyy} */`
 
 // Node built-in modules that need to be shimmed for browser builds.
 // 'stream', 'events', 'buffer', 'crypto', and 'process' get real browser-compatible polyfills.
@@ -24,10 +24,16 @@ const banner = `/*! ExcelJS ${dd}-${mm}-${yyyy} */`;
 const nodeBrowserPlugin = {
   name: 'node-browser-shims',
   setup(build) {
-    const emptyPath = path.join(__dirname, 'empty-module.js');
+    const emptyPath = path.join(__dirname, 'empty-module.js')
 
     // Modules that need real browser-compatible polyfills (both bare and node:-prefixed)
-    const polyfilled = new Set(['stream', 'events', 'buffer', 'crypto', 'process']);
+    const polyfilled = new Set([
+      'stream',
+      'events',
+      'buffer',
+      'crypto',
+      'process',
+    ])
 
     const polyfilledResolvers = {
       stream: () => require.resolve('stream-browserify'),
@@ -36,38 +42,39 @@ const nodeBrowserPlugin = {
       buffer: () => require.resolve('buffer/'),
       crypto: () => path.join(__dirname, 'shims', 'crypto-shim.js'),
       process: () => path.join(__dirname, 'shims', 'process-shim.js'),
-    };
+    }
 
     // Register resolvers for both bare and node:-prefixed imports
     for (const [mod, resolver] of Object.entries(polyfilledResolvers)) {
-      const escaped = mod.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      build.onResolve({filter: new RegExp(`^(node:)?${escaped}$`)}, () => ({
+      const escaped = mod.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      build.onResolve({ filter: new RegExp(`^(node:)?${escaped}$`) }, () => ({
         path: resolver(),
-      }));
+      }))
     }
 
     // All other Node builtins get stubbed as empty modules
-    const builtins = require('module').builtinModules
-      .filter(m => !m.startsWith('_') && !m.startsWith('node:') && !polyfilled.has(m));
+    const builtins = require('module').builtinModules.filter(
+      (m) => !m.startsWith('_') && !m.startsWith('node:') && !polyfilled.has(m),
+    )
 
     for (const mod of builtins) {
       // Handle both bare and node:-prefixed imports
-      const escaped = mod.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      build.onResolve({filter: new RegExp(`^(node:)?${escaped}$`)}, () => ({
+      const escaped = mod.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      build.onResolve({ filter: new RegExp(`^(node:)?${escaped}$`) }, () => ({
         path: emptyPath,
-      }));
+      }))
     }
   },
-};
+}
 
 const browserBuildOptions = {
   bundle: true,
   platform: 'browser',
   globalName: 'ExcelJS',
-  banner: {js: banner},
+  banner: { js: banner },
   // UMD-compatible footer: allows the bundle to work with CommonJS require()
   // in addition to the browser global (var ExcelJS = ...)
-  footer: {js: 'if(typeof module!=="undefined")module.exports=ExcelJS;'},
+  footer: { js: 'if(typeof module!=="undefined")module.exports=ExcelJS;' },
   target: ['es2015'],
   plugins: [nodeBrowserPlugin],
   // Inject process and Buffer shims so they are available as globals in the browser bundle
@@ -78,16 +85,16 @@ const browserBuildOptions = {
   define: {
     'process.env.NODE_ENV': '"production"',
   },
-};
+}
 
 async function build() {
   // Ensure the empty module shim exists
-  const emptyModulePath = path.join(__dirname, 'empty-module.js');
+  const emptyModulePath = path.join(__dirname, 'empty-module.js')
   if (!fs.existsSync(emptyModulePath)) {
-    fs.writeFileSync(emptyModulePath, 'module.exports = {};\n');
+    fs.writeFileSync(emptyModulePath, 'module.exports = {};\n')
   }
 
-  const repoRoot = path.resolve(__dirname, '..');
+  const repoRoot = path.resolve(__dirname, '..')
 
   // 1. Bundle lib/exceljs.browser.js -> dist/exceljs.js (with source map)
   await esbuild.build({
@@ -95,7 +102,7 @@ async function build() {
     entryPoints: [path.join(repoRoot, 'lib', 'exceljs.browser.js')],
     outfile: path.join(distDir, 'exceljs.js'),
     sourcemap: true,
-  });
+  })
 
   // 2. Bundle lib/exceljs.bare.js -> dist/exceljs.bare.js (with source map)
   await esbuild.build({
@@ -103,7 +110,7 @@ async function build() {
     entryPoints: [path.join(repoRoot, 'lib', 'exceljs.bare.js')],
     outfile: path.join(distDir, 'exceljs.bare.js'),
     sourcemap: true,
-  });
+  })
 
   // 3. Minified versions
   await esbuild.build({
@@ -112,7 +119,7 @@ async function build() {
     outfile: path.join(distDir, 'exceljs.min.js'),
     sourcemap: true,
     minify: true,
-  });
+  })
 
   await esbuild.build({
     ...browserBuildOptions,
@@ -120,11 +127,11 @@ async function build() {
     outfile: path.join(distDir, 'exceljs.bare.min.js'),
     sourcemap: true,
     minify: true,
-  });
+  })
 
   // 4. Transpile lib/ to dist/cjs/ (Node 20+ CJS build)
-  const libDir = path.resolve(__dirname, '..', 'lib');
-  const cjsDir = path.join(distDir, 'cjs');
+  const libDir = path.resolve(__dirname, '..', 'lib')
+  const cjsDir = path.join(distDir, 'cjs')
 
   await esbuild.build({
     entryPoints: collectJsFiles(libDir),
@@ -134,39 +141,39 @@ async function build() {
     format: 'cjs',
     sourcemap: true,
     target: ['node20'],
-  });
+  })
 
   // Copy the nodejs entry as index.js
-  const nodejsEntry = path.join(cjsDir, 'exceljs.nodejs.js');
-  const indexEntry = path.join(cjsDir, 'index.js');
+  const nodejsEntry = path.join(cjsDir, 'exceljs.nodejs.js')
+  const indexEntry = path.join(cjsDir, 'index.js')
   if (fs.existsSync(nodejsEntry)) {
-    fs.copyFileSync(nodejsEntry, indexEntry);
+    fs.copyFileSync(nodejsEntry, indexEntry)
   }
 
   // Copy LICENSE to dist/
-  const licenseSrc = path.resolve(__dirname, '..', 'LICENSE');
-  const licenseDest = path.join(distDir, 'LICENSE');
+  const licenseSrc = path.resolve(__dirname, '..', 'LICENSE')
+  const licenseDest = path.join(distDir, 'LICENSE')
   if (fs.existsSync(licenseSrc)) {
-    fs.copyFileSync(licenseSrc, licenseDest);
+    fs.copyFileSync(licenseSrc, licenseDest)
   }
 
-  console.log('Build complete.');
+  console.log('Build complete.')
 }
 
 function collectJsFiles(dir) {
-  const files = [];
-  for (const entry of fs.readdirSync(dir, {withFileTypes: true})) {
-    const fullPath = path.join(dir, entry.name);
+  const files = []
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = path.join(dir, entry.name)
     if (entry.isDirectory()) {
-      files.push(...collectJsFiles(fullPath));
+      files.push(...collectJsFiles(fullPath))
     } else if (entry.name.endsWith('.js')) {
-      files.push(fullPath);
+      files.push(fullPath)
     }
   }
-  return files;
+  return files
 }
 
-build().catch(err => {
-  console.error('Build failed:', err);
-  process.exit(1);
-});
+build().catch((err) => {
+  console.error('Build failed:', err)
+  process.exit(1)
+})

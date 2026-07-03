@@ -1,12 +1,12 @@
-const testXformHelper = require('../test-xform-helper');
+const testXformHelper = require('../test-xform-helper')
 
-const PrintOptionsXform = verquire('xlsx/xform/sheet/print-options-xform');
+const PrintOptionsXform = verquire('xlsx/xform/sheet/print-options-xform')
 
 const expectations = [
   {
     title: 'empty',
     create() {
-      return new PrintOptionsXform();
+      return new PrintOptionsXform()
     },
     preparedModel: {},
     xml: '',
@@ -16,9 +16,9 @@ const expectations = [
   {
     title: 'gridlines',
     create() {
-      return new PrintOptionsXform();
+      return new PrintOptionsXform()
     },
-    preparedModel: {showGridLines: true},
+    preparedModel: { showGridLines: true },
     xml: '<printOptions gridLines="1"/>',
     parsedModel: {
       showGridLines: true,
@@ -31,9 +31,9 @@ const expectations = [
   {
     title: 'headers',
     create() {
-      return new PrintOptionsXform();
+      return new PrintOptionsXform()
     },
-    preparedModel: {showRowColHeaders: true},
+    preparedModel: { showRowColHeaders: true },
     xml: '<printOptions headings="1"/>',
     parsedModel: {
       showGridLines: false,
@@ -46,9 +46,9 @@ const expectations = [
   {
     title: 'centered',
     create() {
-      return new PrintOptionsXform();
+      return new PrintOptionsXform()
     },
-    preparedModel: {horizontalCentered: true, verticalCentered: true},
+    preparedModel: { horizontalCentered: true, verticalCentered: true },
     xml: '<printOptions horizontalCentered="1" verticalCentered="1"/>',
     parsedModel: {
       showGridLines: false,
@@ -58,8 +58,8 @@ const expectations = [
     },
     tests: ['render', 'renderIn', 'parse'],
   },
-];
+]
 
 describe('PrintOptionsXform', () => {
-  testXformHelper(expectations);
-});
+  testXformHelper(expectations)
+})

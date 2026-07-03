@@ -1,14 +1,14 @@
-const testXformHelper = require('../test-xform-helper');
+const testXformHelper = require('../test-xform-helper')
 
 const WorkbookCalcPropertiesXform = verquire(
-  'xlsx/xform/book/workbook-calc-properties-xform'
-);
+  'xlsx/xform/book/workbook-calc-properties-xform',
+)
 
 const expectations = [
   {
     title: 'default',
     create() {
-      return new WorkbookCalcPropertiesXform();
+      return new WorkbookCalcPropertiesXform()
     },
     preparedModel: {},
     xml: '<calcPr calcId="171027"></calcPr>',
@@ -18,15 +18,15 @@ const expectations = [
   {
     title: 'fullCalcOnLoad',
     create() {
-      return new WorkbookCalcPropertiesXform();
+      return new WorkbookCalcPropertiesXform()
     },
-    preparedModel: {fullCalcOnLoad: true},
+    preparedModel: { fullCalcOnLoad: true },
     xml: '<calcPr calcId="171027" fullCalcOnLoad="1"></calcPr>',
     parsedModel: {},
     tests: ['render', 'renderIn', 'parse'],
   },
-];
+]
 
 describe('WorkbookCalcPropertiesXform', () => {
-  testXformHelper(expectations);
-});
+  testXformHelper(expectations)
+})

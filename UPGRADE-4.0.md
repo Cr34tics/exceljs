@@ -2,11 +2,10 @@
 
 ## `wb.createInputStream()` deprecation
 
-| ExcelJS V3.9.*                                                      | ExcelJS v4                         |
-|---------------------------------------------------------------------|------------------------------------|
-|`stream.pipe(workbook.xlsx.createInputStream());`                    | `await workbook.xlsx.read(stream)` |
-|                                                                     |                                    |
-
+| ExcelJS V3.9.\*                                   | ExcelJS v4                         |
+| ------------------------------------------------- | ---------------------------------- |
+| `stream.pipe(workbook.xlsx.createInputStream());` | `await workbook.xlsx.read(stream)` |
+|                                                   |                                    |
 
 ## Stream Reading
 
@@ -16,12 +15,11 @@ While upgrading to version 4 you get more ways to stream reading file.
 
 We strongly recommend using this way, because it's 20% faster than any other and you get flow control
 
-``` js
-const workbook = new ExcelJS.stream.xlsx.WorkbookReader('./file.xlsx');
+```js
+const workbook = new ExcelJS.stream.xlsx.WorkbookReader('./file.xlsx')
 for await (const worksheetReader of workbookReader) {
   for await (const row of worksheetReader) {
     // ...
-
     // continue, break, return
   }
 }
@@ -34,16 +32,16 @@ const options = {
   sharedStrings: 'emit',
   hyperlinks: 'emit',
   worksheets: 'emit',
-};
-const workbook = new ExcelJS.stream.xlsx.WorkbookReader('./file.xlsx', options);
-for await (const {eventType, value} of workbook.parse()) {
+}
+const workbook = new ExcelJS.stream.xlsx.WorkbookReader('./file.xlsx', options)
+for await (const { eventType, value } of workbook.parse()) {
   switch (eventType) {
     case 'shared-strings':
-      // value is the shared string
+    // value is the shared string
     case 'worksheet':
-      // value is the worksheetReader
+    // value is the worksheetReader
     case 'hyperlinks':
-      // value is the hyperlinksReader
+    // value is the hyperlinksReader
   }
 }
 ```
@@ -55,23 +53,25 @@ const options = {
   sharedStrings: 'emit',
   hyperlinks: 'emit',
   worksheets: 'emit',
-};
-const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader('./file.xlsx', options);
-workbookReader.read();
-workbookReader.on('worksheet', worksheet => {
-  worksheet.on('row', row => {
-  });
-});
-workbookReader.on('shared-strings', sharedString => {
+}
+const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader(
+  './file.xlsx',
+  options,
+)
+workbookReader.read()
+workbookReader.on('worksheet', (worksheet) => {
+  worksheet.on('row', (row) => {})
+})
+workbookReader.on('shared-strings', (sharedString) => {
   // ...
-});
-workbookReader.on('hyperlinks', hyperlinksReader => {
+})
+workbookReader.on('hyperlinks', (hyperlinksReader) => {
   // ...
-});
+})
 workbookReader.on('end', () => {
   // ...
-});
+})
 workbookReader.on('error', (err) => {
   // ...
-});
+})
 ```
