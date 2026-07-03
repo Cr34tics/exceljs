@@ -5,7 +5,7 @@ const { promisify } = require('util')
 
 const fsReadFileAsync = promisify(fs.readFile)
 
-const JSZip = require('jszip')
+const { unzipSync } = require('fflate')
 
 const ExcelJS = verquire('exceljs')
 
@@ -51,9 +51,9 @@ describe('Workbook', () => {
 
       return workbook.xlsx.writeFile(TEST_XLSX_FILEPATH).then(async () => {
         const buffer = await fsReadFileAsync(TEST_XLSX_FILEPATH)
-        const zip = await JSZip.loadAsync(buffer)
+        const files = unzipSync(buffer)
         for (const filepath of PIVOT_TABLE_FILEPATHS) {
-          expect(zip.files[filepath]).to.not.be.undefined()
+          expect(files[filepath]).to.not.be.undefined()
         }
       })
     })
@@ -68,9 +68,9 @@ describe('Workbook', () => {
 
       return workbook.xlsx.writeFile(TEST_XLSX_FILEPATH).then(async () => {
         const buffer = await fsReadFileAsync(TEST_XLSX_FILEPATH)
-        const zip = await JSZip.loadAsync(buffer)
+        const files = unzipSync(buffer)
         for (const filepath of PIVOT_TABLE_FILEPATHS) {
-          expect(zip.files[filepath]).to.be.undefined()
+          expect(files[filepath]).to.be.undefined()
         }
       })
     })
