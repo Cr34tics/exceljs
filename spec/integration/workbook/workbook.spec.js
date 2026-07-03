@@ -914,7 +914,7 @@ describe('Workbook', () => {
       expect.fail('should fail for given argument')
     } catch (e) {
       expect(e.message).to.equal(
-        "Can't read the data of 'the loaded zip file'. Is it in a supported JavaScript type (String, Blob, ArrayBuffer, etc) ?",
+        "Can't read the data of 'the loaded zip file'. Is it in a supported JavaScript type (Buffer, ArrayBuffer, Uint8Array) ?",
       )
     }
   })

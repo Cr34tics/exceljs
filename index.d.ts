@@ -1634,7 +1634,7 @@ export interface WorkbookProperties {
   date1904: boolean
 }
 
-export interface JSZipGeneratorOptions {
+export interface ZipGeneratorOptions {
   /**
    * @default DEFLATE
    */
@@ -1647,6 +1647,11 @@ export interface JSZipGeneratorOptions {
   }
 }
 
+/**
+ * @deprecated Renamed to `ZipGeneratorOptions`. Kept as an alias for backwards compatibility.
+ */
+export type JSZipGeneratorOptions = ZipGeneratorOptions
+
 export interface XlsxReadOptions {
   /**
    * The list of XML node names to ignore while parsing an XLSX file
@@ -1656,9 +1661,10 @@ export interface XlsxReadOptions {
 
 export interface XlsxWriteOptions extends stream.xlsx.WorkbookWriterOptions {
   /**
-   * The option passed to JsZip#generateAsync(options)
+   * Zip generation options. `compression` selects STORE/DEFLATE and
+   * `compressionOptions.level` sets the deflate level (0-9).
    */
-  zip: Partial<JSZipGeneratorOptions>
+  zip: Partial<ZipGeneratorOptions>
 }
 
 export interface Xlsx {

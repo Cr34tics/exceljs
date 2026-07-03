@@ -27,6 +27,11 @@
       "description": "Extra npm supply-chain age gate (mirrors Yarn's npmMinimalAgeGate: 7d)",
       "matchDatasources": ["npm"],
       "minimumReleaseAge": "7 days"
+    },
+    {
+      "description": "Consciously kept complete/frozen packages — no maintained replacement exists, so exempt them from abandonment flagging (events has zero deps; buffer/stream-browserify are the standard browser polyfills; saxes is jsdom's XML parser)",
+      "matchDepNames": ["events", "buffer", "stream-browserify", "saxes"],
+      "abandonmentThreshold": null
     }
   ],
   "lockFileMaintenance": {
