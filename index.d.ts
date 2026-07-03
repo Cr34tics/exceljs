@@ -726,6 +726,12 @@ export interface Column {
   readonly collapsed: boolean
 
   /**
+   * Add a manual page break to the right of this column. Optional `top`/`bottom`
+   * (1-based row numbers) limit the break's vertical extent.
+   */
+  addPageBreak(top?: number, bottom?: number): void
+
+  /**
    * Iterate over all current cells in this column
    */
   eachCell(callback: (cell: Cell, rowNumber: number) => void): void
@@ -862,6 +868,16 @@ export interface PageSetup {
    * Which number to use for the first page
    */
   firstPageNumber: number
+
+  /**
+   * How many copies to print
+   */
+  copies: number
+
+  /**
+   * Whether to use the printer's default settings
+   */
+  usePrinterDefaults: boolean
 
   /**
    * 	Whether to center the sheet data horizontally, `false` by default
@@ -1054,6 +1070,13 @@ export interface RowBreak {
   man: number
 }
 
+export interface ColBreak {
+  id: number
+  max: number
+  min: number
+  man: number
+}
+
 export interface WorksheetModel {
   id: number
   name: string
@@ -1062,6 +1085,7 @@ export interface WorksheetModel {
   pageSetup: Partial<PageSetup>
   headerFooter: Partial<HeaderFooter>
   rowBreaks: RowBreak[]
+  colBreaks: ColBreak[]
   views: WorksheetView[]
   autoFilter: AutoFilter
   media: Media[]
