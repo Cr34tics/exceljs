@@ -212,6 +212,16 @@ And one without...
 
 # Interface[⬆](#contents)<!-- Link generated with jump2header -->
 
+### Not Currently Supported
+
+The following features are intentionally not implemented. Files that use them can still be
+read (ExcelJS will not crash), but the features themselves are dropped rather than preserved:
+
+- **Charts and chart sheets** (`xl/charts/*`, `xl/chartsheets/*`) — not read or written.
+- **Threaded comments** — only the legacy note/VML comment mechanism is supported.
+- **Per-comment author names** — comments are written with a single, fixed author.
+- **Phonetic (ruby / `rPh`) text** in shared strings — not round-tripped.
+
 ## Create a Workbook[⬆](#contents)<!-- Link generated with jump2header -->
 
 ```javascript
@@ -721,6 +731,9 @@ worksheet.spliceColumns(3, 2)
 const newCol3Values = [1, 2, 3, 4, 5]
 const newCol4Values = ['one', 'two', 'three', 'four', 'five']
 worksheet.spliceColumns(3, 1, newCol3Values, newCol4Values)
+
+// Insert a manual page break to the right of a column
+worksheet.getColumn(3).addPageBreak()
 ```
 
 ## Rows[⬆](#contents)<!-- Link generated with jump2header -->

@@ -21,5 +21,22 @@ describe('Worksheet', () => {
 
       expect(ws.rowBreaks.length).to.equal(2)
     })
+
+    it('adds multiple column breaks', () => {
+      const wb = new Excel.Workbook()
+      const ws = wb.addWorksheet('blort')
+
+      ws.getColumn(2).addPageBreak()
+      ws.getColumn(4).addPageBreak(1, 10)
+      // bottom === 1 must limit the break to the first row (max 0), not fall
+      // back to the full-height default
+      ws.getColumn(6).addPageBreak(undefined, 1)
+
+      expect(ws.colBreaks.length).to.equal(3)
+      expect(ws.colBreaks[0]).to.deep.equal({ id: 2, max: 1048575, man: 1 })
+      // 1-based top/bottom -> 0-based min/max; top === 1 -> min omitted
+      expect(ws.colBreaks[1]).to.deep.equal({ id: 4, max: 9, man: 1 })
+      expect(ws.colBreaks[2]).to.deep.equal({ id: 6, max: 0, man: 1 })
+    })
   })
 })

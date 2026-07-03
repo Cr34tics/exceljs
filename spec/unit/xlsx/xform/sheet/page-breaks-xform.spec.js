@@ -12,7 +12,7 @@ const expectations = [
     preparedModel: { id: 2, max: 3, min: 1, man: 1 },
     xml: '<brk id="2" max="3" min="1" man="1"/>',
     parsedModel: { id: 2, max: 3, min: 1, man: 1 },
-    tests: ['prepare', 'render', 'renderIn'],
+    tests: ['prepare', 'render', 'renderIn', 'parse'],
   },
 ]
 
