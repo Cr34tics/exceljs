@@ -143,4 +143,14 @@ module.exports = [
       'n/no-process-exit': 'off',
     },
   },
+
+  // verquire conditionally requires the built CJS output (dist/cjs), a generated
+  // artifact that is absent unless `yarn build` has run — don't resolve it at lint time.
+  {
+    files: ['spec/utils/verquire.js'],
+    rules: {
+      'import/no-unresolved': 'off',
+      'n/no-missing-require': 'off',
+    },
+  },
 ];
