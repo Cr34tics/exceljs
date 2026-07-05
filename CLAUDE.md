@@ -8,17 +8,17 @@ Node **>=22.12.0** is a hard floor (`excel.js` throws below it).
 
 ## Commands
 
-| Task              | Command                                                               |
-| ----------------- | --------------------------------------------------------------------- |
-| Setup             | `corepack enable && yarn install` (Yarn 4 via Corepack)               |
-| **Fast dev loop** | `yarn test:unit && yarn test:integration` — needs **no build**        |
-| Single spec file  | `yarn mocha --require spec/config/setup.js spec/unit/path/to.spec.js` |
-| Build             | `yarn build` (esbuild → `dist/` browser bundles + `dist/cjs/`)        |
-| Full suite        | `yarn test:full` (build + unit + integration + e2e + browser)         |
-| Browser tests     | one-time `yarn playwright install chromium`, then `yarn test:browser` |
-| Lint              | `yarn lint` — **zero warnings tolerated**; `yarn lint:fix` to autofix |
-| Format            | `yarn format` (Prettier owns formatting)                              |
-| Type check        | `yarn tsc --noEmit -p tsconfig.check-types.json` (what CI runs)       |
+| Task              | Command                                                                                                                                                        |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Setup             | `corepack enable && yarn install` (Yarn 4 via Corepack)                                                                                                        |
+| **Fast dev loop** | `yarn test:unit && yarn test:integration` — needs **no build**                                                                                                 |
+| Single spec file  | unit: `yarn mocha --require spec/config/setup.js --require spec/config/setup-unit.js spec/unit/path/to.spec.js`; integration/e2e: same without `setup-unit.js` |
+| Build             | `yarn build` (esbuild → `dist/` browser bundles + `dist/cjs/`)                                                                                                 |
+| Full suite        | `yarn test:full` (build + unit + integration + e2e + browser)                                                                                                  |
+| Browser tests     | one-time `yarn playwright install chromium`, then `yarn test:browser`                                                                                          |
+| Lint              | `yarn lint` — **zero warnings tolerated**; `yarn lint:fix` to autofix                                                                                          |
+| Format            | `yarn format` (Prettier owns formatting)                                                                                                                       |
+| Type check        | `yarn tsc --noEmit -p tsconfig.check-types.json` (what CI runs)                                                                                                |
 
 - Do **not** use `yarn test:typescript` — it requires a prior build and is currently broken;
   CI type-checks only via tsc above.
