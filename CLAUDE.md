@@ -40,7 +40,8 @@ Node **>=22.12.0** is a hard floor (`excel.js` throws below it).
   events/buffer/stream-browserify/saxes (deliberately kept browser deps).
 - Style: **no semicolons**, single quotes, trailing commas, no max line length (`.prettierrc` +
   Prettier defaults). ESLint bans `for-in`, labeled statements, `with`, bitwise ops, and `await`
-  in loops; `console.warn` is the only console call allowed.
+  in loops; in `lib/` and `spec/`, `console.warn` is the only console call allowed (build/tooling
+  scripts and legacy `test/**` are exempt).
 
 ## Architecture map
 
@@ -72,8 +73,10 @@ Node **>=22.12.0** is a hard floor (`excel.js` throws below it).
 - Layout: `spec/unit` (fast), `spec/integration` (real files; `gold.spec.js` round-trips
   `gold.xlsx` — the compatibility gold standard), `spec/end-to-end`, `spec/dist` (built bundles).
 - xform specs use the shared harness `spec/unit/xlsx/xform/test-xform-helper.js`: export
-  expectation objects `{title, create(), initialModel, preparedModel, parsedModel, xml, tests: ['prepare', 'render', 'parse', ...]}`;
-  XML is compared whitespace-insensitively.
+  expectation objects `{title, create(), initialModel, preparedModel, parsedModel, reconciledModel, xml, options, tests: [...]}`
+  — each entry in `tests` requires specific fields (e.g. `reconcile` needs `parsedModel` +
+  `reconciledModel`; full mapping in the add-xlsx-feature skill); XML is compared
+  whitespace-insensitively.
 - Top-level `test/` is legacy manual scripts — the real suite lives in `spec/`.
 
 ## Conventions
