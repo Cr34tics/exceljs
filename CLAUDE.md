@@ -20,8 +20,8 @@ Node **>=22.12.0** is a hard floor (`excel.js` throws below it).
 | Format            | `yarn format` (Prettier owns formatting)                                                                                                                       |
 | Type check        | `yarn tsc --noEmit -p tsconfig.check-types.json` (what CI runs)                                                                                                |
 
-- Do **not** use `yarn test:typescript` — it requires a prior build and is currently broken;
-  CI type-checks only via tsc above.
+- Do **not** use `yarn test:typescript` — it is not part of CI and requires a prior `yarn build`
+  (`index.ts` imports `./dist/cjs`); CI's only type gate is the tsc command above.
 - No git hooks run (husky leftovers are inert) — lint and format yourself before pushing.
 - e2e specs bind fixed port 3003; a busy port causes unrelated-looking failures.
 - `.yarnrc.yml` rejects npm packages published <7 days ago (`npmMinimalAgeGate`) — a brand-new
@@ -38,10 +38,10 @@ Node **>=22.12.0** is a hard floor (`excel.js` throws below it).
   GitHub Release tag and opens a sync PR afterwards.
 - Do not reintroduce jszip/tmp/uuid/got (deliberately removed); do not replace
   events/buffer/stream-browserify/saxes (deliberately kept browser deps).
-- Style: **no semicolons**, single quotes, trailing commas, no max line length (`.prettierrc` +
-  Prettier defaults). ESLint bans `for-in`, labeled statements, `with`, bitwise ops, and `await`
-  in loops; in `lib/` and `spec/`, `console.warn` is the only console call allowed (build/tooling
-  scripts and legacy `test/**` are exempt).
+- Style: **no semicolons**, single quotes, trailing commas (`.prettierrc`); there is no ESLint
+  `max-len` rule — Prettier wraps at its default `printWidth` 80. ESLint bans `for-in`, labeled
+  statements, `with`, bitwise ops, and `await` in loops; in `lib/` and `spec/`, `console.warn` is
+  the only console call allowed (build/tooling scripts and legacy `test/**` are exempt).
 
 ## Architecture map
 

@@ -7,8 +7,8 @@ root — read it first.** The absolute minimum if you skip it:
   `yarn test:unit && yarn test:integration` (no build required).
 - In specs, load library code with the global `verquire('path/under/lib')` — never
   `require('../../lib/...')`.
-- Formatting is Prettier-owned: **no semicolons**, single quotes, no max line length.
-  `yarn lint` must pass with zero warnings.
+- Formatting is Prettier-owned: **no semicolons**, single quotes, no ESLint `max-len` rule
+  (Prettier wraps at its default `printWidth` 80). `yarn lint` must pass with zero warnings.
 - Never edit `dist/` (generated), never bump the `package.json` version in a PR, and update the
   hand-maintained `index.d.ts` for any public API change.
 
