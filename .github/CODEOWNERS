@@ -1,0 +1,3 @@
+# Entire repo — GitHub auto-requests review (and sends a notification) on every
+# PR opened by another author, including Renovate's grouped dependency PRs.
+* @inter-jelin23

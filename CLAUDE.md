@@ -4,7 +4,10 @@
 (npm.pkg.github.com), not public npm. Only remote is `origin`; there is no upstream sync. The fork
 exists to retire abandoned deps (jszip→fflate, archiver@8, unzipper@0.12) and modernize tooling.
 Node **>=22.12.0** is a hard floor (`excel.js` throws below it).
-**README.md is still upstream's — do not trust it for setup or install instructions.**
+**README.md is largely still upstream's** — its **Installation**, **Project status**, and
+**Contributions** sections have been rewritten to be fork-accurate (GitHub Packages auth, scoped
+`@cr34tics/exceljs` imports, maintenance-fork policy), but the rest (API examples, feature list,
+`README_zh.md` translation) is upstream and not verified for this fork.
 
 ## Commands
 

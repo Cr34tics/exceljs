@@ -6,15 +6,149 @@ Read, manipulate and write spreadsheet data and styles to XLSX and JSON.
 
 Reverse engineered from Excel spreadsheet files as a project.
 
+# Project status
+
+`@cr34tics/exceljs` is a hard fork of [ExcelJS](https://github.com/exceljs/exceljs), maintained by
+Cr34tics **solely to keep dependencies current**. It is provided **as-is**, with no warranty and no
+support commitment.
+
+- We do **not** accept feature requests.
+- New features are added only on a need-basis by our organization.
+- If you need a feature this fork doesn't provide, fork this repository or the
+  [original ExcelJS](https://github.com/exceljs/exceljs).
+
 # Translations
 
 - [中文文档](README_zh.md)
 
+> **Note:** the translation is community/upstream-maintained and may be out of date for this fork (it
+> still shows the unscoped `exceljs` package and predates the GitHub Packages auth steps). Follow the
+> English **Installation** section below for authenticated install.
+
 # Installation
 
+`@cr34tics/exceljs` is published to **GitHub Packages** (`npm.pkg.github.com`), not the public npm
+registry. GitHub Packages requires authentication for **every** install — even for public packages —
+so you must configure a token before installing.
+
+## 1. Create a token
+
+Create a **personal access token (classic)** with the **`read:packages`** scope
+(GitHub → _Settings → Developer settings → Personal access tokens → Tokens (classic)_). GitHub
+Packages does not support fine-grained tokens for the npm registry.
+
+Expose it as an environment variable so the config files below can reference it without committing a
+secret:
+
 ```shell
-npm install exceljs
+export GITHUB_TOKEN=ghp_your_token_here
 ```
+
+## 2. Configure your package manager
+
+Point the `@cr34tics` scope at GitHub Packages, then install.
+
+### npm
+
+Add to a project-level `.npmrc` (next to `package.json`):
+
+```ini
+@cr34tics:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```
+
+```shell
+npm install @cr34tics/exceljs
+```
+
+### Yarn Classic (v1)
+
+Yarn 1 reads `.npmrc` but does **not** expand `${...}` variables, so keep the scope map in a
+project-level `.npmrc` and put a **literal** token in your per-user `~/.npmrc` (never commit the
+token):
+
+```ini
+# .npmrc (project — safe to commit, no secret)
+@cr34tics:registry=https://npm.pkg.github.com
+```
+
+```ini
+# ~/.npmrc (user home — holds the secret)
+//npm.pkg.github.com/:_authToken=YOUR_TOKEN_HERE
+```
+
+```shell
+yarn add @cr34tics/exceljs
+```
+
+### Yarn (v4 / Berry)
+
+Yarn 4 ignores `.npmrc`. Configure `.yarnrc.yml` instead (note: the scope key has no `@`):
+
+```yaml
+npmScopes:
+  cr34tics:
+    npmRegistryServer: 'https://npm.pkg.github.com'
+    npmAlwaysAuth: true
+    npmAuthToken: '${GITHUB_TOKEN}'
+```
+
+```shell
+yarn add @cr34tics/exceljs
+```
+
+> Keep `GITHUB_TOKEN` set in every shell that runs Yarn — Yarn Berry refuses to run **any** command
+> (not just installs) when a referenced variable is unset.
+
+### pnpm
+
+Map the scope in a project-level `.npmrc`:
+
+```ini
+@cr34tics:registry=https://npm.pkg.github.com
+```
+
+pnpm ≥ 11.5.3 ignores `${...}` placeholders in a project `.npmrc` (a deliberate security change), so
+set the token in your **user** config instead of committing it:
+
+```shell
+pnpm config set //npm.pkg.github.com/:_authToken "${GITHUB_TOKEN}"
+```
+
+```shell
+pnpm add @cr34tics/exceljs
+```
+
+## CI / automation
+
+- **GitHub Actions inside the `Cr34tics` org** — the built-in `GITHUB_TOKEN` can install the package,
+  but only from repos the package has granted access to (i.e. same-org repos), and only if the job
+  grants `packages: read`. Let `actions/setup-node` write the auth `.npmrc`:
+
+  ```yaml
+  # in your workflow job:
+  permissions:
+    contents: read
+    packages: read
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        registry-url: 'https://npm.pkg.github.com'
+        scope: '@cr34tics'
+    - run: npm install
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  ```
+
+- **Any other CI — including GitHub Actions in a different org** — the built-in `GITHUB_TOKEN` cannot
+  read another org's packages, so create a classic PAT with `read:packages`, store it as a secret,
+  expose it as `GITHUB_TOKEN`, and use the same setup shown above.
+
+> **Security:** never commit a real token value. An `.npmrc` that only references `${GITHUB_TOKEN}`
+> (npm) or a `.yarnrc.yml` using `${GITHUB_TOKEN}` (Yarn 4) is safe to commit; the literal token
+> (Yarn 1's `~/.npmrc`, or the value written by `pnpm config set`) lives only in your user config or
+> CI secret store — never in the repo.
 
 # New Features!
 
@@ -56,19 +190,14 @@ npm install exceljs
 
 # Contributions
 
-Contributions are very welcome! It helps me know what features are desired or what bugs are causing the most pain.
+This is a maintenance fork. We do **not** accept feature requests, and we only consider pull requests
+that keep dependencies current or fix defects in the maintained code — merged on a need-basis by our
+organization. If you need functionality that isn't here, please fork this repository or the
+[original ExcelJS](https://github.com/exceljs/exceljs).
 
-I have just one request; If you submit a pull request for a bugfix, please add a unit-test or integration-test (in the spec folder) that catches the problem.
-Even a PR that just has a failing test is fine - I can analyse what the test is doing and fix the code from that.
-
-Note: Please try to avoid modifying the package version in a PR.
-Versions are updated on release and any change will most likely result in merge collisions.
-
-To be clear, all contributions added to this library will be included in the library's MIT licence.
-
-### Let's chat together:
-
-[![SiemaTeam](https://discordapp.com/api/guilds/976854442009825321/widget.png?style=banner2)](https://discord.gg/siema)
+If you do open a bug-fix PR, please include a unit or integration test (in the `spec` folder) that
+reproduces the problem, and do not bump the package version (versions are set at release time). All
+contributions are covered by the project's MIT licence.
 
 # Contents
 
@@ -178,7 +307,7 @@ To be clear, all contributions added to this library will be included in the lib
 # Importing[⬆](#contents)<!-- Link generated with jump2header -->
 
 ```javascript
-const ExcelJS = require('exceljs')
+const ExcelJS = require('@cr34tics/exceljs')
 ```
 
 ## CJS Imports[⬆](#contents)<!-- Link generated with jump2header -->
@@ -186,10 +315,10 @@ const ExcelJS = require('exceljs')
 To use the CJS build from the dist folder (e.g. for bundler compatibility), use the dist/cjs path.
 
 ```javascript
-const ExcelJS = require('exceljs/dist/cjs')
+const ExcelJS = require('@cr34tics/exceljs/dist/cjs')
 ```
 
-**Note:** The main entry point (`require('exceljs')`) is recommended for most use cases.
+**Note:** The main entry point (`require('@cr34tics/exceljs')`) is recommended for most use cases.
 The CJS build targets Node.js 22+ and does not include polyfills.
 
 ## Browser Bundles[⬆](#contents)<!-- Link generated with jump2header -->
