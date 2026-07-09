@@ -21,6 +21,10 @@ support commitment.
 
 - [中文文档](README_zh.md)
 
+> **Note:** the translation is community/upstream-maintained and may be out of date for this fork (it
+> still shows the unscoped `exceljs` package and predates the GitHub Packages auth steps). Follow the
+> English **Installation** section below for authenticated install.
+
 # Installation
 
 `@cr34tics/exceljs` is published to **GitHub Packages** (`npm.pkg.github.com`), not the public npm
@@ -59,19 +63,23 @@ npm install @cr34tics/exceljs
 
 ### Yarn Classic (v1)
 
-Yarn 1 reads the same `.npmrc` as npm:
+Yarn 1 reads `.npmrc` but does **not** expand `${...}` variables, so keep the scope map in a
+project-level `.npmrc` and put a **literal** token in your per-user `~/.npmrc` (never commit the
+token):
 
 ```ini
+# .npmrc (project — safe to commit, no secret)
 @cr34tics:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```
+
+```ini
+# ~/.npmrc (user home — holds the secret)
+//npm.pkg.github.com/:_authToken=YOUR_TOKEN_HERE
 ```
 
 ```shell
 yarn add @cr34tics/exceljs
 ```
-
-> If your Yarn 1 version does not expand `${GITHUB_TOKEN}`, put the literal token in your per-user
-> `~/.npmrc` instead (never commit it).
 
 ### Yarn (v4 / Berry)
 
@@ -89,13 +97,22 @@ npmScopes:
 yarn add @cr34tics/exceljs
 ```
 
+> Keep `GITHUB_TOKEN` set in every shell that runs Yarn — Yarn Berry refuses to run **any** command
+> (not just installs) when a referenced variable is unset.
+
 ### pnpm
 
-pnpm reads the same `.npmrc` as npm:
+Map the scope in a project-level `.npmrc`:
 
 ```ini
 @cr34tics:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```
+
+pnpm ≥ 11.5.3 ignores `${...}` placeholders in a project `.npmrc` (a deliberate security change), so
+set the token in your **user** config instead of committing it:
+
+```shell
+pnpm config set //npm.pkg.github.com/:_authToken "${GITHUB_TOKEN}"
 ```
 
 ```shell
@@ -104,25 +121,34 @@ pnpm add @cr34tics/exceljs
 
 ## CI / automation
 
-- **GitHub Actions** — use the built-in `GITHUB_TOKEN`; no PAT needed. Let `actions/setup-node` write
-  the auth `.npmrc`:
+- **GitHub Actions inside the `Cr34tics` org** — the built-in `GITHUB_TOKEN` can install the package,
+  but only from repos the package has granted access to (i.e. same-org repos), and only if the job
+  grants `packages: read`. Let `actions/setup-node` write the auth `.npmrc`:
 
   ```yaml
-  - uses: actions/setup-node@v4
-    with:
-      node-version: 22
-      registry-url: 'https://npm.pkg.github.com'
-      scope: '@cr34tics'
-  - run: npm install
-    env:
-      NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  # in your workflow job:
+  permissions:
+    contents: read
+    packages: read
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        registry-url: 'https://npm.pkg.github.com'
+        scope: '@cr34tics'
+    - run: npm install
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   ```
 
-- **Other CI** — store a classic PAT with `read:packages` as a secret, expose it as `GITHUB_TOKEN`,
-  and use the same `.npmrc` / `.yarnrc.yml` shown above.
+- **Any other CI — including GitHub Actions in a different org** — the built-in `GITHUB_TOKEN` cannot
+  read another org's packages, so create a classic PAT with `read:packages`, store it as a secret,
+  expose it as `GITHUB_TOKEN`, and use the same setup shown above.
 
-> **Security:** never commit a real token. The `${GITHUB_TOKEN}` form keeps the secret in an
-> environment variable, so the `.npmrc` / `.yarnrc.yml` files stay safe to commit.
+> **Security:** never commit a real token value. An `.npmrc` that only references `${GITHUB_TOKEN}`
+> (npm) or a `.yarnrc.yml` using `${GITHUB_TOKEN}` (Yarn 4) is safe to commit; the literal token
+> (Yarn 1's `~/.npmrc`, or the value written by `pnpm config set`) lives only in your user config or
+> CI secret store — never in the repo.
 
 # New Features!
 
