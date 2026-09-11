@@ -32,6 +32,11 @@
       "description": "Consciously kept complete/frozen packages — no maintained replacement exists, so exempt them from abandonment flagging (events has zero deps; buffer/stream-browserify are the standard browser polyfills; saxes is jsdom's XML parser)",
       "matchDepNames": ["events", "buffer", "stream-browserify", "saxes"],
       "abandonmentThreshold": null
+    },
+    {
+      "description": "Block TypeScript 7.0.x — the Go-native compiler ships without the programmatic compiler API, so typescript-eslint (type-aware linting in api/pubsub/logger/email), ts-node (dev/CLI/migrations across every backend), and @vercel/ncc (all GitHub Actions builds) cannot run against it. Unblock once 7.1 restores the API.",
+      "matchPackageNames": ["typescript"],
+      "allowedVersions": "!/^7\\.0\\./"
     }
   ],
   "lockFileMaintenance": {
