@@ -47,6 +47,17 @@ function withDeclaredSize(buffer, entryName, size) {
   throw new Error(`entry not found: ${entryName}`)
 }
 
+// Pads an xlsx with tiny media entries until it has `total` entries
+function withEntryCount(buffer, total) {
+  return rezip(buffer, (files) => {
+    const padded = { ...files }
+    for (let i = Object.keys(files).length; i < total; i++) {
+      padded[`xl/media/pad${i}.bin`] = new Uint8Array(1)
+    }
+    return padded
+  })
+}
+
 async function expectLimitError(promise, pattern) {
   let error
   try {
@@ -72,12 +83,15 @@ async function streamRead(input, options) {
 
 describe('zip decompression limits', () => {
   let small
-  before(async () => {
+  let tooManyEntries
+  before(async function () {
+    this.timeout(30000)
     small = await writeWorkbook()
+    tooManyEntries = withEntryCount(small, 10001)
   })
 
   describe('xlsx.load', () => {
-    it('reads normally without limits', async () => {
+    it('reads a highly compressible entry under the default limits', async () => {
       const wb = new ExcelJS.Workbook()
       await wb.xlsx.load(withBomb(small, 8 * MB))
       expect(wb.getWorksheet('sheet').getCell('A1').value).to.equal('row 1')
@@ -133,13 +147,47 @@ describe('zip decompression limits', () => {
     })
 
     it('validates the limit options', async () => {
-      let error
-      try {
-        await new ExcelJS.Workbook().xlsx.load(small, { maxEntries: -1 })
-      } catch (e) {
-        error = e
-      }
-      expect(error).to.be.an.instanceOf(TypeError)
+      const invalid = [-1, NaN, '10']
+      const errors = await Promise.all(
+        invalid.map((maxEntries) =>
+          new ExcelJS.Workbook().xlsx.load(small, { maxEntries }).then(
+            () => undefined,
+            (error) => error,
+          ),
+        ),
+      )
+      errors.forEach((error, i) => {
+        expect(error, String(invalid[i])).to.be.an.instanceOf(TypeError)
+      })
+    })
+
+    describe('defaults', () => {
+      it('rejects a declared size over 1 GiB without any options', async () => {
+        const lying = withDeclaredSize(
+          withBomb(small, 1024),
+          'xl/media/bomb.bin',
+          0xfffffff0,
+        )
+        await expectLimitError(
+          new ExcelJS.Workbook().xlsx.load(lying),
+          /1073741824 bytes \(maxUncompressedSize\)/,
+        )
+      })
+
+      it('rejects more than 10000 entries without any options', async () => {
+        await expectLimitError(
+          new ExcelJS.Workbook().xlsx.load(tooManyEntries),
+          /more than 10000 entries/,
+        )
+      })
+
+      it('can be disabled with null', async function () {
+        // reading 10000+ entries takes a few seconds
+        this.timeout(30000)
+        const wb = new ExcelJS.Workbook()
+        await wb.xlsx.load(tooManyEntries, { maxEntries: null })
+        expect(wb.getWorksheet('sheet').getCell('A1').value).to.equal('row 1')
+      })
     })
   })
 
@@ -199,6 +247,15 @@ describe('zip decompression limits', () => {
       await expectLimitError(
         streamRead(Readable.from([small]), { maxEntries: 2 }),
         /maxEntries/,
+      )
+    })
+
+    it('rejects more than 10000 entries by default', async function () {
+      // the reader walks all 10000 entries before rejecting
+      this.timeout(30000)
+      await expectLimitError(
+        streamRead(Readable.from([tooManyEntries])),
+        /more than 10000 entries/,
       )
     })
 

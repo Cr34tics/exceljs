@@ -2441,9 +2441,11 @@ faster or more resilient.
 
 Options supported when reading XLSX files.
 
-| Field       | Required | Type  | Description                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| ----------- | -------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ignoreNodes | N        | Array | A list of node names to ignore while loading the XLSX document. Improves performance in some situations. <br/> Available: `sheetPr`, `dimension`, `sheetViews `, `sheetFormatPr`, `cols `, `sheetData`, `autoFilter `, `mergeCells `, `rowBreaks`, `hyperlinks `, `pageMargins`, `dataValidations`, `pageSetup`, `headerFooter `, `printOptions `, `picture`, `drawing`, `sheetProtection`, `tableParts `, `conditionalFormatting`, `extLst`, |
+| Field               | Required | Type   | Description                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------- | -------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ignoreNodes         | N        | Array  | A list of node names to ignore while loading the XLSX document. Improves performance in some situations. <br/> Available: `sheetPr`, `dimension`, `sheetViews `, `sheetFormatPr`, `cols `, `sheetData`, `autoFilter `, `mergeCells `, `rowBreaks`, `hyperlinks `, `pageMargins`, `dataValidations`, `pageSetup`, `headerFooter `, `printOptions `, `picture`, `drawing`, `sheetProtection`, `tableParts `, `conditionalFormatting`, `extLst`, |
+| maxEntries          | N        | Number | Maximum number of entries (files and directories) in the zip archive. Default `10000`. Pass `null` or `Infinity` to disable. See [Zip bomb limits](#zip-bomb-limits).                                                                                                                                                                                                                                                                         |
+| maxUncompressedSize | N        | Number | Maximum total uncompressed size of the archive, in bytes. Default `1073741824` (1 GiB). Pass `null` or `Infinity` to disable. See [Zip bomb limits](#zip-bomb-limits).                                                                                                                                                                                                                                                                        |
 
 ```javascript
 // read from a file
@@ -2469,6 +2471,37 @@ await workbook.xlsx.load(data, {
   ],
 })
 // ... use workbook
+```
+
+##### Zip bomb limits
+
+An xlsx file is a zip archive, and a small crafted file can decompress to gigabytes of data (a "zip bomb").
+Reading therefore enforces two limits by default:
+
+| Limit                 | `xlsx.load` / `read` / `readFile` | Streaming `WorkbookReader` |
+| --------------------- | --------------------------------- | -------------------------- |
+| `maxEntries`          | 10,000 entries                    | 10,000 entries             |
+| `maxUncompressedSize` | 1 GiB                             | 4 GiB                      |
+
+`xlsx.load` / `read` / `readFile` check the uncompressed size declared by each zip entry before inflating it.
+The streaming reader counts the bytes it actually inflates from the parts it parses; media is skipped without being counted.
+
+When a limit is exceeded, the read rejects with an `Error` whose `code` is `'ERR_ZIP_LIMIT_EXCEEDED'`:
+
+```javascript
+try {
+  await workbook.xlsx.load(data, { maxUncompressedSize: 100 * 1024 * 1024 })
+} catch (error) {
+  if (error.code === 'ERR_ZIP_LIMIT_EXCEEDED') {
+    // reject the upload
+  }
+}
+```
+
+Pass a larger number to raise a limit, or `null` / `Infinity` to disable it for trusted input:
+
+```javascript
+await workbook.xlsx.readFile(filename, { maxUncompressedSize: null })
 ```
 
 #### Writing XLSX[⬆](#contents)<!-- Link generated with jump2header -->
@@ -2739,15 +2772,17 @@ The streaming XLSX workbook reader is available in the ExcelJS.stream.xlsx names
 
 The constructor takes a required input argument and an optional options argument:
 
-| Argument              | Description                                                                                                                                                                                                                                                                             |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| input (required)      | Specifies the name of the file or the readable stream from which to read the XLSX workbook.                                                                                                                                                                                             |
-| options (optional)    | Specifies how to handle the event types occuring during the read parsing.                                                                                                                                                                                                               |
-| options.entries       | Specifies whether to emit entries (`'emit'`) or not (`'ignore'`). Default is `'emit'`.                                                                                                                                                                                                  |
-| options.sharedStrings | Specifies whether to cache shared strings (`'cache'`), which inserts them into the respective cell values, or whether to emit them (`'emit'`) or ignore them (`'ignore'`), in both of which case the cell value will be a reference to the shared string's index. Default is `'cache'`. |
-| options.hyperlinks    | Specifies whether to cache hyperlinks (`'cache'`), which inserts them into their respective cells, whether to emit them (`'emit'`) or whether to ignore them (`'ignore'`). Default is `'cache'`.                                                                                        |
-| options.styles        | Specifies whether to cache styles (`'cache'`), which inserts them into their respective rows and cells, or whether to ignore them (`'ignore'`). Default is `'cache'`.                                                                                                                   |
-| options.worksheets    | Specifies whether to emit worksheets (`'emit'`) or not (`'ignore'`). Default is `'emit'`.                                                                                                                                                                                               |
+| Argument                    | Description                                                                                                                                                                                                                                                                             |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| input (required)            | Specifies the name of the file or the readable stream from which to read the XLSX workbook.                                                                                                                                                                                             |
+| options (optional)          | Specifies how to handle the event types occuring during the read parsing.                                                                                                                                                                                                               |
+| options.entries             | Specifies whether to emit entries (`'emit'`) or not (`'ignore'`). Default is `'emit'`.                                                                                                                                                                                                  |
+| options.sharedStrings       | Specifies whether to cache shared strings (`'cache'`), which inserts them into the respective cell values, or whether to emit them (`'emit'`) or ignore them (`'ignore'`), in both of which case the cell value will be a reference to the shared string's index. Default is `'cache'`. |
+| options.hyperlinks          | Specifies whether to cache hyperlinks (`'cache'`), which inserts them into their respective cells, whether to emit them (`'emit'`) or whether to ignore them (`'ignore'`). Default is `'cache'`.                                                                                        |
+| options.styles              | Specifies whether to cache styles (`'cache'`), which inserts them into their respective rows and cells, or whether to ignore them (`'ignore'`). Default is `'cache'`.                                                                                                                   |
+| options.worksheets          | Specifies whether to emit worksheets (`'emit'`) or not (`'ignore'`). Default is `'emit'`.                                                                                                                                                                                               |
+| options.maxEntries          | Maximum number of entries in the zip archive. Default is `10000`. Use `null` or `Infinity` to disable. See [Zip bomb limits](#zip-bomb-limits).                                                                                                                                         |
+| options.maxUncompressedSize | Maximum total bytes inflated from the parts the reader parses. Default is `4294967296` (4 GiB). Use `null` or `Infinity` to disable. See [Zip bomb limits](#zip-bomb-limits).                                                                                                           |
 
 ```js
 const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader('./file.xlsx')

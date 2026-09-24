@@ -1643,22 +1643,26 @@ export type JSZipGeneratorOptions = ZipGeneratorOptions
 
 /**
  * Limits that guard against zip decompression bombs when reading an XLSX file.
- * Both are unlimited by default. Exceeding one rejects with an `Error` whose
- * `code` is `'ERR_ZIP_LIMIT_EXCEEDED'`.
+ * Omit a limit to use the default; pass `null` or `Infinity` to disable it.
+ * Exceeding one rejects with an `Error` whose `code` is
+ * `'ERR_ZIP_LIMIT_EXCEEDED'`.
  */
 export interface ZipReadLimits {
   /**
-   * Maximum number of entries (files and directories) in the zip archive
+   * Maximum number of entries (files and directories) in the zip archive.
+   * @default 10000
    */
-  maxEntries: number
+  maxEntries: number | null
   /**
    * Maximum total uncompressed size, in bytes, of the archive entries that
    * are read. `xlsx.load`/`read`/`readFile` count every entry, using the size
    * declared in the zip before inflating; the streaming `WorkbookReader`
    * counts the bytes actually inflated from the workbook, worksheet, shared
    * string and style parts (media is skipped without being buffered).
+   * @default 1073741824 (1 GiB) for `xlsx.load`/`read`/`readFile`;
+   * 4294967296 (4 GiB) for the streaming `WorkbookReader`
    */
-  maxUncompressedSize: number
+  maxUncompressedSize: number | null
 }
 
 export interface XlsxReadOptions extends ZipReadLimits {
@@ -2310,15 +2314,19 @@ export namespace stream {
        */
       entries?: 'emit' | 'ignore'
       /**
-       * Maximum number of entries in the zip archive
+       * Maximum number of entries in the zip archive; `null` or `Infinity`
+       * disables the limit
+       * @default 10000
        * @see ZipReadLimits
        */
-      maxEntries?: number
+      maxEntries?: number | null
       /**
-       * Maximum total uncompressed size, in bytes, of the parts read
+       * Maximum total uncompressed size, in bytes, of the parts read; `null`
+       * or `Infinity` disables the limit
+       * @default 4294967296 (4 GiB)
        * @see ZipReadLimits
        */
-      maxUncompressedSize?: number
+      maxUncompressedSize?: number | null
     }
 
     class WorkbookReader extends Workbook {
