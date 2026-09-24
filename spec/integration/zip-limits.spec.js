@@ -524,6 +524,29 @@ describe('zip decompression limits', () => {
       expect(error.code).to.not.equal(LIMIT_CODE)
     })
 
+    it('rejects an input stream that already failed or was closed', async () => {
+      const errored = new Readable({ read() {} })
+      errored.on('error', () => {})
+      errored.destroy(new Error('input failed'))
+      const closed = new Readable({ read() {} })
+      closed.destroy()
+      // let the 'error' and 'close' events fire before the reader sees them
+      await new Promise((resolve) => setImmediate(resolve))
+
+      const results = await Promise.all(
+        [errored, closed].map((input) =>
+          streamRead(input).then(
+            () => undefined,
+            (error) => error,
+          ),
+        ),
+      )
+      expect(results[0], 'errored input').to.be.an.instanceOf(Error)
+      expect(results[0].message).to.equal('input failed')
+      expect(results[1], 'closed input').to.be.an.instanceOf(Error)
+      expect(results[1].message).to.match(/already closed/)
+    })
+
     it('stops reading a caller-supplied stream when the consumer stops early', async function () {
       this.timeout(10000)
       const wb = new ExcelJS.Workbook()

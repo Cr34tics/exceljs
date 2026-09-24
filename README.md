@@ -2489,7 +2489,9 @@ The streaming reader counts the bytes it actually inflates from the workbook, wo
 It holds a worksheet in memory until it can parse it when the worksheet comes before the shared strings part (as in files written by Excel and exceljs) or shared strings aren't cached, so this limit also bounds that memory.
 Other entries (media, themes, drawings, ...) are inflated and discarded without being counted: they cost CPU time but not memory.
 
-When a limit is exceeded, the read rejects with an `Error` whose `code` is `'ERR_ZIP_LIMIT_EXCEEDED'`:
+When a limit is exceeded, the read fails with an `Error` whose `code` is `'ERR_ZIP_LIMIT_EXCEEDED'`.
+`xlsx.load` / `read` / `readFile` and the streaming reader's `for await` / `parse()` interfaces reject with it;
+the streaming reader's event-based `read()` emits it on the reader's `'error'` event instead, so listen for that rather than relying on `try` / `catch`:
 
 ```javascript
 try {
@@ -2499,6 +2501,17 @@ try {
     // reject the upload
   }
 }
+
+// streaming reader, event-based: errors arrive as an 'error' event
+const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader(stream, {
+  maxUncompressedSize: 100 * 1024 * 1024,
+})
+workbookReader.on('error', (error) => {
+  if (error.code === 'ERR_ZIP_LIMIT_EXCEEDED') {
+    // reject the upload
+  }
+})
+await workbookReader.read()
 ```
 
 Pass a larger number to raise a limit, or `null` / `Infinity` to disable it for trusted input:
