@@ -375,13 +375,7 @@ export declare enum ErrorValue {
 
 export interface CellErrorValue {
   error:
-    | '#N/A'
-    | '#REF!'
-    | '#NAME?'
-    | '#DIV/0!'
-    | '#NULL!'
-    | '#VALUE!'
-    | '#NUM!'
+    '#N/A' | '#REF!' | '#NAME?' | '#DIV/0!' | '#NULL!' | '#VALUE!' | '#NUM!'
 }
 
 export interface RichText {
@@ -1230,10 +1224,7 @@ export type ConditionalFormattingRule =
   | DataBarRuleType
 
 export type RowValues =
-  | CellValue[]
-  | { [key: string]: CellValue }
-  | undefined
-  | null
+  CellValue[] | { [key: string]: CellValue } | undefined | null
 
 export interface ConditionalFormattingOptions {
   ref: string
@@ -1498,9 +1489,7 @@ export interface Worksheet {
     range: Range | string | Location,
     formula: string,
     results?:
-      | ((r: number, c: number) => string | number)
-      | number[]
-      | number[][],
+      ((r: number, c: number) => string | number) | number[] | number[][],
   ): void
 
   /**
@@ -1652,7 +1641,27 @@ export interface ZipGeneratorOptions {
  */
 export type JSZipGeneratorOptions = ZipGeneratorOptions
 
-export interface XlsxReadOptions {
+/**
+ * Limits that guard against zip decompression bombs when reading an XLSX file.
+ * Both are unlimited by default. Exceeding one rejects with an `Error` whose
+ * `code` is `'ERR_ZIP_LIMIT_EXCEEDED'`.
+ */
+export interface ZipReadLimits {
+  /**
+   * Maximum number of entries (files and directories) in the zip archive
+   */
+  maxEntries: number
+  /**
+   * Maximum total uncompressed size, in bytes, of the archive entries that
+   * are read. `xlsx.load`/`read`/`readFile` count every entry, using the size
+   * declared in the zip before inflating; the streaming `WorkbookReader`
+   * counts the bytes actually inflated from the workbook, worksheet, shared
+   * string and style parts (media is skipped without being buffered).
+   */
+  maxUncompressedSize: number
+}
+
+export interface XlsxReadOptions extends ZipReadLimits {
   /**
    * The list of XML node names to ignore while parsing an XLSX file
    */
@@ -2300,6 +2309,16 @@ export namespace stream {
        * @default 'ignore'
        */
       entries?: 'emit' | 'ignore'
+      /**
+       * Maximum number of entries in the zip archive
+       * @see ZipReadLimits
+       */
+      maxEntries?: number
+      /**
+       * Maximum total uncompressed size, in bytes, of the parts read
+       * @see ZipReadLimits
+       */
+      maxUncompressedSize?: number
     }
 
     class WorkbookReader extends Workbook {
