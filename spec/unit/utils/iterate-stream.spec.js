@@ -58,4 +58,13 @@ describe('iterateStream', () => {
     }
     expect(stream.listenerCount('data')).to.equal(0)
   })
+
+  it('leaves no listeners on a stream it read to the end', async () => {
+    // the stream ends while the iterator is waiting for more data
+    const stream = new PassThrough()
+    stream.write('a')
+    setImmediate(() => stream.end())
+    await collect(stream)
+    expect(stream.listenerCount('data')).to.equal(0)
+  })
 })

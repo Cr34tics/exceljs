@@ -1,4 +1,5 @@
 const HyperlinkReader = verquire('stream/xlsx/hyperlink-reader')
+const Enums = verquire('doc/enums')
 
 const RELS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
@@ -20,6 +21,9 @@ describe('HyperlinkReader', () => {
     })
     await reader.read()
     expect(reader.count).to.equal(2)
+    expect(reader.hyperlinks.rId1.type).to.equal(
+      Enums.RelationshipType.Hyperlink,
+    )
     const targets = []
     reader.each((hyperlink) => targets.push(hyperlink.target))
     expect(targets).to.deep.equal([
