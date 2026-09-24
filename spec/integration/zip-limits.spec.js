@@ -482,5 +482,101 @@ describe('zip decompression limits', () => {
         process.removeListener('unhandledRejection', onUnhandled)
       }
     })
+
+    it('still reports malformed hyperlinks XML and finishes the read', async () => {
+      const wb = new ExcelJS.Workbook()
+      wb.addWorksheet('sheet').getCell('A1').value = {
+        text: 'link',
+        hyperlink: 'https://example.com',
+      }
+      const buffer = rezip(
+        Buffer.from(await wb.xlsx.writeBuffer()),
+        (files) => ({
+          ...files,
+          'xl/worksheets/_rels/sheet1.xml.rels': strToU8(
+            '<Relationships><Relationship Id="rId1" <<<broken',
+          ),
+        }),
+      )
+      const reader = new ExcelJS.stream.xlsx.WorkbookReader(
+        Readable.from([buffer]),
+        { hyperlinks: 'emit' },
+      )
+      const hyperlinkReads = []
+      reader.on('hyperlinks', (hyperlinks) => {
+        hyperlinkReads.push(
+          hyperlinks.read().then(
+            () => undefined,
+            (error) => error,
+          ),
+        )
+      })
+      reader.on('worksheet', (worksheet) => worksheet.on('row', () => {}))
+      // the workbook read must settle, not hang on the abandoned entry
+      await new Promise((resolve, reject) => {
+        reader.on('end', resolve)
+        reader.on('error', reject)
+        reader.read()
+      })
+      expect(hyperlinkReads).to.have.length(1)
+      const error = await hyperlinkReads[0]
+      expect(error, 'expected the parse error').to.be.an.instanceOf(Error)
+      expect(error.code).to.not.equal(LIMIT_CODE)
+    })
+
+    it('stops reading a caller-supplied stream when the consumer stops early', async function () {
+      this.timeout(10000)
+      const wb = new ExcelJS.Workbook()
+      const ws = wb.addWorksheet('sheet')
+      for (let i = 1; i <= 20000; i++) {
+        ws.addRow([i, `row ${i % 100}`])
+      }
+      // Shared strings first, so rows stream while the input is still read
+      const first = [
+        'xl/_rels/workbook.xml.rels',
+        'xl/workbook.xml',
+        'xl/sharedStrings.xml',
+      ]
+      const buffer = rezip(
+        Buffer.from(await wb.xlsx.writeBuffer()),
+        (files) => {
+          const ordered = {}
+          first.forEach((name) => {
+            ordered[name] = files[name]
+          })
+          return { ...ordered, ...files }
+        },
+      )
+      let offset = 0
+      const input = new Readable({
+        read() {
+          setImmediate(() => {
+            this.push(
+              offset < buffer.length
+                ? buffer.subarray(offset, (offset += 4096))
+                : null,
+            )
+          })
+        },
+      })
+      const reader = new ExcelJS.stream.xlsx.WorkbookReader(input, {})
+      for await (const worksheet of reader) {
+        for await (const rows of worksheet) {
+          expect(rows).to.be.ok()
+          break
+        }
+        break
+      }
+      expect(input.listenerCount('data')).to.equal(0)
+      // The paused input may still fill its own buffer (highWaterMark), but
+      // nothing reads it any more, so it then stays put
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      const settled = offset
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      expect(offset).to.equal(settled)
+      expect(offset).to.be.below(buffer.length)
+      // the input is the caller's to close
+      expect(input.destroyed).to.equal(false)
+    })
   })
 })
