@@ -483,7 +483,7 @@ describe('zip decompression limits', () => {
       }
     })
 
-    it('still reports malformed hyperlinks XML and finishes the read', async () => {
+    it('reports malformed hyperlinks XML on the workbook and finishes the read', async () => {
       const wb = new ExcelJS.Workbook()
       wb.addWorksheet('sheet').getCell('A1').value = {
         text: 'link',
@@ -513,15 +513,51 @@ describe('zip decompression limits', () => {
       })
       reader.on('worksheet', (worksheet) => worksheet.on('row', () => {}))
       // the workbook read must settle, not hang on the abandoned entry
-      await new Promise((resolve, reject) => {
-        reader.on('end', resolve)
-        reader.on('error', reject)
+      const workbookError = await new Promise((resolve) => {
+        reader.on('end', () => resolve(undefined))
+        reader.on('error', resolve)
         reader.read()
       })
+      expect(workbookError, 'workbook error').to.be.an.instanceOf(Error)
+      expect(workbookError.code).to.not.equal(LIMIT_CODE)
       expect(hyperlinkReads).to.have.length(1)
-      const error = await hyperlinkReads[0]
-      expect(error, 'expected the parse error').to.be.an.instanceOf(Error)
-      expect(error.code).to.not.equal(LIMIT_CODE)
+      expect(await hyperlinkReads[0]).to.equal(workbookError)
+    })
+
+    it('lets a hyperlinks listener defer its read()', async () => {
+      const wb = new ExcelJS.Workbook()
+      const ws = wb.addWorksheet('sheet')
+      for (let i = 1; i <= 20; i++) {
+        ws.getCell(`A${i}`).value = {
+          text: `link ${i}`,
+          hyperlink: `https://example.com/${i}`,
+        }
+      }
+      const unhandled = []
+      const onUnhandled = (error) => unhandled.push(error)
+      process.on('unhandledRejection', onUnhandled)
+      try {
+        const reader = new ExcelJS.stream.xlsx.WorkbookReader(
+          Readable.from([Buffer.from(await wb.xlsx.writeBuffer())]),
+          { hyperlinks: 'emit' },
+        )
+        const pending = []
+        reader.on('hyperlinks', (hyperlinks) => pending.push(hyperlinks))
+        reader.on('worksheet', (worksheet) => worksheet.on('row', () => {}))
+        await new Promise((resolve, reject) => {
+          reader.on('end', resolve)
+          reader.on('error', reject)
+          reader.read()
+        })
+        // The workbook reader already read them before moving on; a late
+        // read() shares that read instead of finding the entry consumed
+        expect(pending).to.have.length(1)
+        await pending[0].read()
+        await new Promise((resolve) => setImmediate(resolve))
+        expect(unhandled).to.have.length(0)
+      } finally {
+        process.removeListener('unhandledRejection', onUnhandled)
+      }
     })
 
     it('rejects an input stream that already failed or was closed', async () => {
