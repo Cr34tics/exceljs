@@ -65,4 +65,11 @@ describe('ZipLimits', () => {
       .to.throw(Error, /maxUncompressedSize/)
       .with.property('code', ZipLimits.ERROR_CODE)
   })
+
+  it('rejects a size that is not a finite non-negative number', () => {
+    const limits = new ZipLimits({ maxUncompressedSize: 10 })
+    for (const size of [NaN, -1, Infinity, undefined]) {
+      expect(() => limits.addBytes(size), String(size)).to.throw(TypeError)
+    }
+  })
 })

@@ -48,6 +48,34 @@ function withDeclaredSize(buffer, entryName, size) {
   throw new Error(`entry not found: ${entryName}`)
 }
 
+// A zip64 archive whose one central directory record keeps its uncompressed
+// size in a zip64 extra field that is cut off by the end of the file
+function withTruncatedZip64Size() {
+  const name = Buffer.from('xl/media/x.bin')
+  const record = Buffer.alloc(46 + name.length + 6)
+  record.writeUInt32LE(0x02014b50, 0)
+  record.writeUInt32LE(1, 20) // compressed size (stored)
+  record.writeUInt32LE(0xffffffff, 24) // uncompressed size: see zip64 extra
+  record.writeUInt16LE(name.length, 28)
+  record.writeUInt16LE(6, 30) // extra field length
+  name.copy(record, 46)
+  record.writeUInt16LE(1, 46 + name.length) // zip64 extra field id
+  record.writeUInt16LE(8, 48 + name.length) // its 8 bytes run past the end
+  const recordOffset = 56 + 20 + 22
+  const zip64End = Buffer.alloc(56)
+  zip64End.writeUInt32LE(0x06064b50, 0)
+  zip64End.writeUInt32LE(1, 32) // total entries
+  zip64End.writeUInt32LE(recordOffset, 48) // central directory offset
+  const locator = Buffer.alloc(20)
+  locator.writeUInt32LE(0x07064b50, 0) // zip64 end record at offset 0
+  const end = Buffer.alloc(22)
+  end.writeUInt32LE(0x06054b50, 0)
+  end.writeUInt16LE(1, 8)
+  end.writeUInt16LE(1, 10)
+  end.writeUInt32LE(recordOffset, 16)
+  return Buffer.concat([zip64End, locator, end, record])
+}
+
 // Pads an xlsx with stored, empty directory records until it has `total`
 // entries: both readers count them, and load() skips them, which keeps the
 // fixture cheap to build and to read
@@ -202,6 +230,26 @@ describe('zip decompression limits', () => {
         }),
         /maxUncompressedSize/,
       )
+    })
+
+    it('rejects a directory that claims more than maxEntries before walking it', async () => {
+      const claimed = Buffer.from(small)
+      const end = claimed.length - 22
+      claimed.writeUInt16LE(60000, end + 8)
+      claimed.writeUInt16LE(60000, end + 10)
+      await expectLimitError(
+        new ExcelJS.Workbook().xlsx.load(claimed, { maxEntries: 20 }),
+        /maxEntries/,
+      )
+    })
+
+    it('rejects a zip64 size that runs past the end of the data', async () => {
+      // read as NaN, it would make every later limit check pass
+      const error = await rejectionOf(
+        new ExcelJS.Workbook().xlsx.load(withTruncatedZip64Size()),
+      )
+      expect(error, 'expected the load to fail').to.be.an.instanceOf(Error)
+      expect(error.cause.message).to.equal('invalid zip data')
     })
 
     it('stops inflating an entry that under-declares its size', async () => {
@@ -593,6 +641,68 @@ describe('zip decompression limits', () => {
       }
     })
 
+    it('rejects an input stream that was already partly read', async () => {
+      const input = Readable.from([small.subarray(0, 100), small.subarray(100)])
+      input.read()
+      const error = await rejectionOf(streamRead(input))
+      expect(error, 'expected a rejection').to.be.an.instanceOf(Error)
+      expect(error.message).to.match(/already read from or closed/)
+    })
+
+    it('reads dates from an archive without xl/workbook.xml', async () => {
+      const wb = new ExcelJS.Workbook()
+      wb.addWorksheet('sheet').getCell('A1').value = new Date(
+        Date.UTC(2021, 0, 1),
+      )
+      const buffer = rezip(
+        Buffer.from(await wb.xlsx.writeBuffer()),
+        (files) => {
+          const rest = { ...files }
+          delete rest['xl/workbook.xml']
+          return rest
+        },
+      )
+      // used to throw a TypeError on the missing workbook properties
+      const rows = await streamRead(Readable.from([buffer]), {
+        styles: 'cache',
+      })
+      expect(rows).to.equal(1)
+    })
+
+    it('fails the read on malformed hyperlinks XML despite an error listener', async () => {
+      const wb = new ExcelJS.Workbook()
+      wb.addWorksheet('sheet').getCell('A1').value = {
+        text: 'link',
+        hyperlink: 'https://example.com',
+      }
+      const buffer = rezip(
+        Buffer.from(await wb.xlsx.writeBuffer()),
+        (files) => ({
+          ...files,
+          'xl/worksheets/_rels/sheet1.xml.rels': strToU8(
+            '<Relationships><Relationship Id="rId1" <<<broken',
+          ),
+        }),
+      )
+      const reader = new ExcelJS.stream.xlsx.WorkbookReader(
+        Readable.from([buffer]),
+        { hyperlinks: 'emit' },
+      )
+      const hyperlinkErrors = []
+      reader.on('hyperlinks', (hyperlinks) => {
+        hyperlinks.on('error', (error) => hyperlinkErrors.push(error))
+        hyperlinks.read()
+      })
+      reader.on('worksheet', (worksheet) => worksheet.on('row', () => {}))
+      const workbookError = await new Promise((resolve) => {
+        reader.on('end', () => resolve(undefined))
+        reader.on('error', resolve)
+        reader.read()
+      })
+      expect(workbookError, 'workbook error').to.be.an.instanceOf(Error)
+      expect(hyperlinkErrors).to.deep.equal([workbookError])
+    })
+
     it('lets a parse() consumer read hyperlinks after moving on', async () => {
       const wb = new ExcelJS.Workbook()
       const ws = wb.addWorksheet('sheet')
@@ -641,7 +751,7 @@ describe('zip decompression limits', () => {
       expect(results[0], 'errored input').to.be.an.instanceOf(Error)
       expect(results[0].message).to.equal('input failed')
       expect(results[1], 'closed input').to.be.an.instanceOf(Error)
-      expect(results[1].message).to.match(/already closed/)
+      expect(results[1].message).to.match(/already read from or closed/)
     })
 
     it('stops reading a caller-supplied stream when the consumer stops early', async function () {
