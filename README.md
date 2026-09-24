@@ -2483,11 +2483,10 @@ Reading therefore enforces two limits by default:
 | `maxEntries`          | 10,000 entries                    | 10,000 entries             |
 | `maxUncompressedSize` | 1 GiB                             | 4 GiB                      |
 
-`xlsx.load` / `read` / `readFile` check the uncompressed size declared by each zip entry before inflating it, and reject entries that share compressed data.
-This bounds memory; since an entry can declare less than it inflates to, decompression time can still reach about 1,000 times the size of the file, so limit the size of uploads as well.
-The streaming reader counts the bytes it actually inflates from the workbook, worksheet, shared string, style and relationship parts, including parts its options skip.
+Both limits cover the whole archive: every entry counts, whether exceljs parses it or not (media, themes, drawings, ...).
+`xlsx.load` / `read` / `readFile` add up the uncompressed size each zip entry declares before inflating any of them, then stop inflating an entry as soon as it grows past its declared size, so an archive that lies about its sizes is rejected too.
+The streaming reader counts the bytes it actually inflates, as it inflates them.
 It holds a worksheet in memory until it can parse it when the worksheet comes before the shared strings part (as in files written by Excel and exceljs) or shared strings aren't cached, so this limit also bounds that memory.
-Other entries (media, themes, drawings, ...) are inflated and discarded without being counted: they cost CPU time but not memory.
 
 When a limit is exceeded, the read fails with an `Error` whose `code` is `'ERR_ZIP_LIMIT_EXCEEDED'`.
 `xlsx.load` / `read` / `readFile` and the streaming reader's `for await` / `parse()` interfaces reject with it;
@@ -2798,7 +2797,7 @@ The constructor takes a required input argument and an optional options argument
 | options.styles              | Specifies whether to cache styles (`'cache'`), which inserts them into their respective rows and cells, or whether to ignore them (`'ignore'`). Default is `'cache'`.                                                                                                                   |
 | options.worksheets          | Specifies whether to emit worksheets (`'emit'`) or not (`'ignore'`). Default is `'emit'`.                                                                                                                                                                                               |
 | options.maxEntries          | Maximum number of entries in the zip archive. Default is `10000`. Use `null` or `Infinity` to disable. See [Zip bomb limits](#zip-bomb-limits).                                                                                                                                         |
-| options.maxUncompressedSize | Maximum total bytes inflated from the workbook, worksheet, shared string, style and relationship parts. Default is `4294967296` (4 GiB). Use `null` or `Infinity` to disable. See [Zip bomb limits](#zip-bomb-limits).                                                                  |
+| options.maxUncompressedSize | Maximum total bytes inflated from the archive's entries. Default is `4294967296` (4 GiB). Use `null` or `Infinity` to disable. See [Zip bomb limits](#zip-bomb-limits).                                                                                                                 |
 
 ```js
 const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader('./file.xlsx')
@@ -2810,6 +2809,9 @@ for await (const worksheetReader of workbookReader) {
 ```
 
 Please note that `worksheetReader` returns an array of rows rather than each row individually for performance reasons: https://github.com/nodejs/node/issues/31979
+
+The reader streams the archive once, so read each worksheet before moving on to the next one: once the loop moves on, a worksheet you skipped is discarded, and reading it later throws "Stream was already consumed".
+Hyperlinks readers are read by the workbook reader itself before it moves on, so calling their `read()` later is fine.
 
 ###### Iterating over all events(#contents)<!-- Link generated with jump2header -->
 

@@ -1655,13 +1655,11 @@ export interface ZipReadLimits {
    */
   maxEntries?: number | null
   /**
-   * Maximum total uncompressed size, in bytes, of the archive entries that
-   * are read. `xlsx.load`/`read`/`readFile` count every entry, using the size
-   * declared in the zip before inflating; the streaming `WorkbookReader`
-   * counts the bytes actually inflated from the workbook, worksheet, shared
-   * string, style and relationship parts, even those its options skip. It
-   * inflates other entries (media, themes, drawings, ...) and discards them
-   * without counting. `null` or `Infinity` disables the limit.
+   * Maximum total uncompressed size, in bytes, of all the archive's entries,
+   * parsed or not. `xlsx.load`/`read`/`readFile` count the sizes the entries
+   * declare before inflating any, and reject an entry that inflates past its
+   * declared size; the streaming `WorkbookReader` counts the bytes it
+   * actually inflates. `null` or `Infinity` disables the limit.
    * @default 1073741824 (1 GiB) for `xlsx.load`/`read`/`readFile`;
    * 4294967296 (4 GiB) for the streaming `WorkbookReader`
    */

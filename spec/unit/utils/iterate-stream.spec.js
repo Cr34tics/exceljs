@@ -1,4 +1,5 @@
 const { PassThrough } = require('stream')
+const { finished } = require('stream/promises')
 
 const iterateStream = verquire('utils/iterate-stream')
 
@@ -36,7 +37,7 @@ describe('iterateStream', () => {
     const stream = new PassThrough()
     stream.end('a')
     stream.resume()
-    await new Promise((resolve) => stream.on('end', resolve))
+    await finished(stream)
     let error
     try {
       await collect(stream)
