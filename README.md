@@ -2483,8 +2483,11 @@ Reading therefore enforces two limits by default:
 | `maxEntries`          | 10,000 entries                    | 10,000 entries             |
 | `maxUncompressedSize` | 1 GiB                             | 4 GiB                      |
 
-`xlsx.load` / `read` / `readFile` check the uncompressed size declared by each zip entry before inflating it.
-The streaming reader counts the bytes it actually inflates from the parts it parses; media is skipped without being counted.
+`xlsx.load` / `read` / `readFile` check the uncompressed size declared by each zip entry before inflating it, and reject entries that share compressed data.
+This bounds memory; since an entry can declare less than it inflates to, decompression time can still reach about 1,000 times the size of the file, so limit the size of uploads as well.
+The streaming reader counts the bytes it actually inflates from the workbook, worksheet, shared string, style and relationship parts, including parts its options skip.
+It holds a worksheet in memory until it can parse it when the worksheet comes before the shared strings part (as in files written by Excel and exceljs) or shared strings aren't cached, so this limit also bounds that memory.
+Other entries (media, themes, drawings, ...) are inflated and discarded without being counted: they cost CPU time but not memory.
 
 When a limit is exceeded, the read rejects with an `Error` whose `code` is `'ERR_ZIP_LIMIT_EXCEEDED'`:
 
@@ -2782,7 +2785,7 @@ The constructor takes a required input argument and an optional options argument
 | options.styles              | Specifies whether to cache styles (`'cache'`), which inserts them into their respective rows and cells, or whether to ignore them (`'ignore'`). Default is `'cache'`.                                                                                                                   |
 | options.worksheets          | Specifies whether to emit worksheets (`'emit'`) or not (`'ignore'`). Default is `'emit'`.                                                                                                                                                                                               |
 | options.maxEntries          | Maximum number of entries in the zip archive. Default is `10000`. Use `null` or `Infinity` to disable. See [Zip bomb limits](#zip-bomb-limits).                                                                                                                                         |
-| options.maxUncompressedSize | Maximum total bytes inflated from the parts the reader parses. Default is `4294967296` (4 GiB). Use `null` or `Infinity` to disable. See [Zip bomb limits](#zip-bomb-limits).                                                                                                           |
+| options.maxUncompressedSize | Maximum total bytes inflated from the workbook, worksheet, shared string, style and relationship parts. Default is `4294967296` (4 GiB). Use `null` or `Infinity` to disable. See [Zip bomb limits](#zip-bomb-limits).                                                                  |
 
 ```js
 const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader('./file.xlsx')

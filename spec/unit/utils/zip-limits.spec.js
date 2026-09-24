@@ -2,22 +2,12 @@ const ZipLimits = verquire('utils/zip-limits')
 
 const GiB = 1024 * 1024 * 1024
 
-function catchError(fn) {
-  try {
-    fn()
-  } catch (error) {
-    return error
-  }
-  return undefined
-}
-
 describe('ZipLimits', () => {
   describe('defaults', () => {
     it('are 10000 entries and 1 GiB for buffered reads', () => {
       const limits = new ZipLimits({}, ZipLimits.BUFFERED_DEFAULTS)
       expect(limits.maxEntries).to.equal(10000)
       expect(limits.maxUncompressedSize).to.equal(1 * GiB)
-      expect(limits.enabled).to.equal(true)
     })
 
     it('are 10000 entries and 4 GiB for streaming reads', () => {
@@ -41,23 +31,26 @@ describe('ZipLimits', () => {
           { maxEntries: value, maxUncompressedSize: value },
           ZipLimits.BUFFERED_DEFAULTS,
         )
-        expect(limits.maxEntries).to.be.undefined()
-        expect(limits.maxUncompressedSize).to.be.undefined()
-        expect(limits.enabled).to.equal(false)
+        expect(limits.maxEntries).to.equal(Infinity)
+        expect(limits.maxUncompressedSize).to.equal(Infinity)
         limits.addEntry()
         limits.addBytes(8 * GiB)
       }
     })
 
     it('are unlimited when no defaults are given', () => {
-      expect(new ZipLimits({}).enabled).to.equal(false)
+      const limits = new ZipLimits({})
+      expect(limits.maxEntries).to.equal(Infinity)
+      expect(limits.maxUncompressedSize).to.equal(Infinity)
     })
   })
 
   it('rejects invalid values', () => {
     for (const value of [-1, NaN, '10', {}]) {
-      const error = catchError(() => new ZipLimits({ maxEntries: value }))
-      expect(error, String(value)).to.be.an.instanceOf(TypeError)
+      expect(
+        () => new ZipLimits({ maxEntries: value }),
+        String(value),
+      ).to.throw(TypeError)
     }
   })
 
@@ -65,9 +58,11 @@ describe('ZipLimits', () => {
     const limits = new ZipLimits({ maxEntries: 1, maxUncompressedSize: 10 })
     limits.addEntry()
     limits.addBytes(10)
-    const entryError = catchError(() => limits.addEntry())
-    expect(entryError.code).to.equal('ERR_ZIP_LIMIT_EXCEEDED')
-    const sizeError = catchError(() => limits.addBytes(1))
-    expect(sizeError.code).to.equal(ZipLimits.ERROR_CODE)
+    expect(() => limits.addEntry())
+      .to.throw(Error, /maxEntries/)
+      .with.property('code', 'ERR_ZIP_LIMIT_EXCEEDED')
+    expect(() => limits.addBytes(1))
+      .to.throw(Error, /maxUncompressedSize/)
+      .with.property('code', ZipLimits.ERROR_CODE)
   })
 })

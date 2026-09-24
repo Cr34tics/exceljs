@@ -2,7 +2,7 @@ const fs = require('fs')
 const os = require('os')
 const path = require('path')
 const { Readable } = require('stream')
-const { unzipSync, zipSync } = require('fflate')
+const { strToU8, unzipSync, zipSync } = require('fflate')
 
 const ExcelJS = verquire('exceljs')
 
@@ -47,24 +47,85 @@ function withDeclaredSize(buffer, entryName, size) {
   throw new Error(`entry not found: ${entryName}`)
 }
 
-// Pads an xlsx with tiny media entries until it has `total` entries
+// Pads an xlsx with stored, empty directory records until it has `total`
+// entries: both readers count them, and load() skips them, which keeps the
+// fixture cheap to build and to read
 function withEntryCount(buffer, total) {
   return rezip(buffer, (files) => {
     const padded = { ...files }
     for (let i = Object.keys(files).length; i < total; i++) {
-      padded[`xl/media/pad${i}.bin`] = new Uint8Array(1)
+      padded[`xl/media/pad${i}`] = [{}, { level: 0 }]
     }
     return padded
   })
 }
 
-async function expectLimitError(promise, pattern) {
-  let error
+// Adds `copies` more central directory records for `entryName`, all pointing
+// at its one compressed body, the way overlapping-entry zip bombs are built
+function withOverlappingEntries(buffer, entryName, copies) {
+  const eocd = buffer.length - 22
+  const count = buffer.readUInt16LE(eocd + 10)
+  const cdSize = buffer.readUInt32LE(eocd + 12)
+  const cdOffset = buffer.readUInt32LE(eocd + 16)
+  let record
+  for (let i = cdOffset; i < cdOffset + cdSize;) {
+    const nameLength = buffer.readUInt16LE(i + 28)
+    const length =
+      46 +
+      nameLength +
+      buffer.readUInt16LE(i + 30) +
+      buffer.readUInt16LE(i + 32)
+    if (buffer.toString('latin1', i + 46, i + 46 + nameLength) === entryName) {
+      record = buffer.subarray(i, i + length)
+    }
+    i += length
+  }
+  if (!record) throw new Error(`entry not found: ${entryName}`)
+  const trailer = Buffer.from(buffer.subarray(eocd))
+  trailer.writeUInt16LE(count + copies, 8)
+  trailer.writeUInt16LE(count + copies, 10)
+  trailer.writeUInt32LE(cdSize + copies * record.length, 12)
+  return Buffer.concat([
+    buffer.subarray(0, cdOffset + cdSize),
+    ...Array(copies).fill(record),
+    trailer,
+  ])
+}
+
+// Cuts an xlsx off halfway through an entry's compressed data, as an
+// interrupted upload would
+function truncatedIn(buffer, entryName) {
+  const zipped = rezip(buffer, (files) => files)
+  let offset = 0
+  while (zipped.readUInt32LE(offset) === 0x04034b50) {
+    const compressedSize = zipped.readUInt32LE(offset + 18)
+    const nameLength = zipped.readUInt16LE(offset + 26)
+    const name = zipped.toString(
+      'latin1',
+      offset + 30,
+      offset + 30 + nameLength,
+    )
+    const dataStart =
+      offset + 30 + nameLength + zipped.readUInt16LE(offset + 28)
+    if (name === entryName) {
+      return zipped.subarray(0, dataStart + Math.ceil(compressedSize / 2))
+    }
+    offset = dataStart + compressedSize
+  }
+  throw new Error(`entry not found: ${entryName}`)
+}
+
+async function rejectionOf(promise) {
   try {
     await promise
-  } catch (e) {
-    error = e
+  } catch (error) {
+    return error
   }
+  return undefined
+}
+
+async function expectLimitError(promise, pattern) {
+  const error = await rejectionOf(promise)
   expect(error, 'expected a zip limit error').to.be.an.instanceOf(Error)
   expect(error.code).to.equal(LIMIT_CODE)
   expect(error.message).to.match(pattern)
@@ -127,6 +188,19 @@ describe('zip decompression limits', () => {
       )
     })
 
+    it('rejects entries that share compressed data', async () => {
+      // Each copy declares a small size but inflates the whole body again
+      const overlapping = withOverlappingEntries(
+        withBomb(small, 8 * MB),
+        'xl/media/bomb.bin',
+        2,
+      )
+      await expectLimitError(
+        new ExcelJS.Workbook().xlsx.load(overlapping),
+        /overlap/,
+      )
+    })
+
     it('rejects an archive with more than maxEntries entries', async () => {
       const entries = Object.keys(unzipSync(small)).length
       await expectLimitError(
@@ -181,9 +255,7 @@ describe('zip decompression limits', () => {
         )
       })
 
-      it('can be disabled with null', async function () {
-        // reading 10000+ entries takes a few seconds
-        this.timeout(30000)
+      it('can be disabled with null', async () => {
         const wb = new ExcelJS.Workbook()
         await wb.xlsx.load(tooManyEntries, { maxEntries: null })
         expect(wb.getWorksheet('sheet').getCell('A1').value).to.equal('row 1')
@@ -270,6 +342,144 @@ describe('zip decompression limits', () => {
         )
       } finally {
         fs.rmSync(dir, { recursive: true, force: true })
+      }
+    })
+
+    it('rejects an archive cut off inside a part it drains or reads', async () => {
+      // unzipper reports the truncation on the zip stream only; styles.xml is
+      // drained under the default styles: 'ignore', the sheet is read
+      const errors = await Promise.all(
+        ['xl/styles.xml', 'xl/worksheets/sheet1.xml'].map((part) =>
+          rejectionOf(streamRead(Readable.from([truncatedIn(small, part)]))),
+        ),
+      )
+      errors.forEach((error) => {
+        expect(error).to.be.an.instanceOf(Error)
+      })
+    })
+
+    it('rejects when the file cannot be read', async () => {
+      const error = await rejectionOf(
+        streamRead(path.join(os.tmpdir(), 'exceljs-missing', 'none.xlsx')),
+      )
+      expect(error && error.code).to.equal('ENOENT')
+    })
+
+    describe('closes a file it opened', () => {
+      let dir
+      let filename
+      before(() => {
+        const files = unzipSync(small)
+        // A ~2 MB sheet stored uncompressed after the parts that let the
+        // reader stream it, so reading stops long before the file is consumed
+        const rows = []
+        for (let r = 1; r <= 40000; r++) {
+          rows.push(`<row r="${r}"><c r="A${r}"><v>${r}</v></c></row>`)
+        }
+        const sheet = Buffer.from(files['xl/worksheets/sheet1.xml'])
+          .toString()
+          .replace(
+            /<sheetData>.*<\/sheetData>|<sheetData\/>/s,
+            `<sheetData>${rows.join('')}</sheetData>`,
+          )
+        const {
+          'xl/_rels/workbook.xml.rels': rels,
+          'xl/sharedStrings.xml': strings,
+          'xl/workbook.xml': workbook,
+          'xl/worksheets/sheet1.xml': _unused,
+          ...rest
+        } = files
+        dir = fs.mkdtempSync(path.join(os.tmpdir(), 'exceljs-zip-limits-'))
+        filename = path.join(dir, 'streamed.xlsx')
+        const ordered = {
+          'xl/_rels/workbook.xml.rels': rels,
+          'xl/sharedStrings.xml': strings,
+          'xl/workbook.xml': workbook,
+          ...rest,
+          'xl/worksheets/sheet1.xml': strToU8(sheet),
+        }
+        fs.writeFileSync(filename, zipSync(ordered, { level: 0 }))
+      })
+      after(() => {
+        fs.rmSync(dir, { recursive: true, force: true })
+      })
+
+      it('after a limit error raised while iterating a worksheet', async () => {
+        const reader = new ExcelJS.stream.xlsx.WorkbookReader(filename, {
+          maxUncompressedSize: 64 * 1024,
+        })
+        let rows = 0
+        const error = await rejectionOf(
+          (async () => {
+            for await (const worksheet of reader) {
+              for await (const row of worksheet) {
+                if (row) rows++
+              }
+            }
+          })(),
+        )
+        expect(error && error.code).to.equal(LIMIT_CODE)
+        expect(rows).to.be.above(0)
+        expect(reader.stream.destroyed).to.equal(true)
+      })
+
+      it('when the consumer stops early', async () => {
+        const reader = new ExcelJS.stream.xlsx.WorkbookReader(filename, {})
+        for await (const worksheet of reader) {
+          for await (const row of worksheet) {
+            expect(row).to.be.ok()
+            break
+          }
+          break
+        }
+        expect(reader.stream.destroyed).to.equal(true)
+      })
+    })
+
+    it('reports a limit hit in hyperlinks without an unhandled rejection', async () => {
+      const wb = new ExcelJS.Workbook()
+      const ws = wb.addWorksheet('sheet')
+      for (let i = 1; i <= 200; i++) {
+        ws.getCell(`A${i}`).value = {
+          text: `link ${i}`,
+          hyperlink: `https://example.com/${i}`,
+        }
+      }
+      const rels = 'xl/worksheets/_rels/sheet1.xml.rels'
+      let relsSize
+      // Put the sheet rels first so the limit is crossed while they stream
+      const buffer = rezip(
+        Buffer.from(await wb.xlsx.writeBuffer()),
+        ({ [rels]: relsXml, ...rest }) => {
+          relsSize = relsXml.length
+          return { [rels]: relsXml, ...rest }
+        },
+      )
+
+      const unhandled = []
+      const onUnhandled = (error) => unhandled.push(error)
+      process.on('unhandledRejection', onUnhandled)
+      try {
+        const reader = new ExcelJS.stream.xlsx.WorkbookReader(
+          Readable.from([buffer]),
+          { hyperlinks: 'emit', maxUncompressedSize: relsSize - 1 },
+        )
+        // README "Readable stream" pattern: no 'error' listener on hyperlinks
+        reader.on('hyperlinks', (hyperlinks) => {
+          hyperlinks.on('hyperlink', () => {})
+          hyperlinks.read()
+        })
+        const error = await new Promise((resolve) => {
+          reader.on('error', resolve)
+          reader.on('end', () => resolve(undefined))
+          reader.read()
+        })
+        await new Promise((resolve) => setImmediate(resolve))
+        expect(error, 'expected an error event').to.be.an.instanceOf(Error)
+        expect(error.code).to.equal(LIMIT_CODE)
+        expect(unhandled).to.have.length(0)
+      } finally {
+        process.removeListener('unhandledRejection', onUnhandled)
       }
     })
   })

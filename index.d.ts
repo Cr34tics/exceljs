@@ -1649,20 +1649,23 @@ export type JSZipGeneratorOptions = ZipGeneratorOptions
  */
 export interface ZipReadLimits {
   /**
-   * Maximum number of entries (files and directories) in the zip archive.
+   * Maximum number of entries (files and directories) in the zip archive;
+   * `null` or `Infinity` disables the limit.
    * @default 10000
    */
-  maxEntries: number | null
+  maxEntries?: number | null
   /**
    * Maximum total uncompressed size, in bytes, of the archive entries that
    * are read. `xlsx.load`/`read`/`readFile` count every entry, using the size
    * declared in the zip before inflating; the streaming `WorkbookReader`
    * counts the bytes actually inflated from the workbook, worksheet, shared
-   * string and style parts (media is skipped without being buffered).
+   * string, style and relationship parts, even those its options skip. It
+   * inflates other entries (media, themes, drawings, ...) and discards them
+   * without counting. `null` or `Infinity` disables the limit.
    * @default 1073741824 (1 GiB) for `xlsx.load`/`read`/`readFile`;
    * 4294967296 (4 GiB) for the streaming `WorkbookReader`
    */
-  maxUncompressedSize: number | null
+  maxUncompressedSize?: number | null
 }
 
 export interface XlsxReadOptions extends ZipReadLimits {
@@ -2292,7 +2295,7 @@ export namespace stream {
       addWorkbook(): Promise<void>
     }
 
-    interface WorkbookStreamReaderOptions {
+    interface WorkbookStreamReaderOptions extends ZipReadLimits {
       /**
        * @default 'emit'
        */
@@ -2313,20 +2316,6 @@ export namespace stream {
        * @default 'ignore'
        */
       entries?: 'emit' | 'ignore'
-      /**
-       * Maximum number of entries in the zip archive; `null` or `Infinity`
-       * disables the limit
-       * @default 10000
-       * @see ZipReadLimits
-       */
-      maxEntries?: number | null
-      /**
-       * Maximum total uncompressed size, in bytes, of the parts read; `null`
-       * or `Infinity` disables the limit
-       * @default 4294967296 (4 GiB)
-       * @see ZipReadLimits
-       */
-      maxUncompressedSize?: number | null
     }
 
     class WorkbookReader extends Workbook {
