@@ -755,6 +755,30 @@ describe('zip decompression limits', () => {
       expect(hyperlinkErrors).to.deep.equal([workbookError])
     })
 
+    it('fails the read on malformed worksheet XML despite an error listener', async () => {
+      const buffer = rezip(small, (files) => ({
+        ...files,
+        'xl/worksheets/sheet1.xml': strToU8(
+          '<worksheet><sheetData><row r="1" <<<broken',
+        ),
+      }))
+      const reader = new ExcelJS.stream.xlsx.WorkbookReader(
+        Readable.from([buffer]),
+      )
+      const worksheetErrors = []
+      reader.on('worksheet', (worksheet) => {
+        worksheet.on('error', (error) => worksheetErrors.push(error))
+        worksheet.on('row', () => {})
+      })
+      const workbookError = await new Promise((resolve) => {
+        reader.on('end', () => resolve(undefined))
+        reader.on('error', resolve)
+        reader.read()
+      })
+      expect(workbookError, 'workbook error').to.be.an.instanceOf(Error)
+      expect(worksheetErrors).to.deep.equal([workbookError])
+    })
+
     it('lets a parse() consumer read hyperlinks after moving on', async () => {
       const wb = new ExcelJS.Workbook()
       const ws = wb.addWorksheet('sheet')
