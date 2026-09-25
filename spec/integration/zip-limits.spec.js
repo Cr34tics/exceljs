@@ -853,16 +853,27 @@ describe('zip decompression limits', () => {
           return { ...ordered, ...files }
         },
       )
+      // The input holds back everything past the first 32 KiB of the sheet
+      // until the consumer has stopped, so the reader can't have read it all
+      // by then, however slow the consumer is
+      const gate = buffer.indexOf('xl/worksheets/sheet1.xml') + 32 * 1024
+      expect(buffer.length).to.be.above(gate + 128 * 1024)
       let offset = 0
+      let released = false
+      let held
       const input = new Readable({
         read() {
-          setImmediate(() => {
+          const push = () =>
             this.push(
               offset < buffer.length
                 ? buffer.subarray(offset, (offset += 4096))
                 : null,
             )
-          })
+          if (offset >= gate && !released) {
+            held = push
+          } else {
+            setImmediate(push)
+          }
         },
       })
       const reader = new ExcelJS.stream.xlsx.WorkbookReader(input, {})
@@ -874,13 +885,15 @@ describe('zip decompression limits', () => {
         break
       }
       expect(input.listenerCount('data')).to.equal(0)
-      // The paused input may still fill its own buffer (highWaterMark), but
-      // nothing reads it any more, so it then stays put
+      released = true
+      if (held) held()
+      // The paused input may still fill its own buffer (highWaterMark, 64 KiB
+      // by default), but nothing reads it any more, so it then stays put
       await new Promise((resolve) => setTimeout(resolve, 100))
       const settled = offset
       await new Promise((resolve) => setTimeout(resolve, 200))
       expect(offset).to.equal(settled)
-      expect(offset).to.be.below(buffer.length)
+      expect(offset).to.be.at.most(gate + 96 * 1024)
       // the input is the caller's to close
       expect(input.destroyed).to.equal(false)
     })
