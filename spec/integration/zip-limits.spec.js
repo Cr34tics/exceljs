@@ -792,6 +792,32 @@ describe('zip decompression limits', () => {
       expect(worksheetErrors).to.deep.equal([workbookError])
     })
 
+    it('reads a worksheet only once', async () => {
+      const reader = new ExcelJS.stream.xlsx.WorkbookReader(
+        Readable.from([large]),
+      )
+      for await (const worksheet of reader) {
+        let rows = 0
+        worksheet.on('row', () => rows++)
+        const first = worksheet.read()
+        // a second read() shares the first rather than finding no rows
+        expect(worksheet.read()).to.equal(first)
+        await first
+        expect(rows).to.equal(5000)
+        const error = await rejectionOf(
+          (async () => {
+            for await (const row of worksheet) {
+              expect(row).to.be.ok()
+            }
+          })(),
+        )
+        expect(error, 'expected iterating again to fail').to.be.an.instanceOf(
+          Error,
+        )
+        expect(error.message).to.match(/already read/)
+      }
+    })
+
     it('lets a parse() consumer read hyperlinks after moving on', async () => {
       const wb = new ExcelJS.Workbook()
       const ws = wb.addWorksheet('sheet')
