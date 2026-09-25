@@ -3,6 +3,12 @@ const { finished } = require('stream/promises')
 
 const iterateStream = verquire('utils/iterate-stream')
 
+function listenerCounts(stream) {
+  return ['data', 'readable', 'end', 'error', 'close'].map((event) =>
+    stream.listenerCount(event),
+  )
+}
+
 async function collect(stream) {
   const chunks = []
   for await (const chunk of iterateStream(stream)) {
@@ -48,15 +54,19 @@ describe('iterateStream', () => {
     expect(error.message).to.match(/already consumed/)
   })
 
-  it('stops collecting chunks once the consumer stops early', async () => {
-    // Otherwise draining the rest of the stream would buffer all of it
+  it('leaves the stream to be drained once the consumer stops early', async () => {
+    // Otherwise draining the rest of the stream would buffer all of it, or
+    // the drain would never finish
     const stream = new PassThrough()
     stream.write('a')
     for await (const chunk of iterateStream(stream)) {
       expect(chunk.toString()).to.equal('a')
       break
     }
-    expect(stream.listenerCount('data')).to.equal(0)
+    expect(listenerCounts(stream)).to.deep.equal([0, 0, 0, 0, 0])
+    expect(stream.destroyed).to.equal(false)
+    stream.end('b')
+    await finished(stream.resume())
   })
 
   it('leaves no listeners on a stream it read to the end', async () => {
@@ -65,6 +75,6 @@ describe('iterateStream', () => {
     stream.write('a')
     setImmediate(() => stream.end())
     await collect(stream)
-    expect(stream.listenerCount('data')).to.equal(0)
+    expect(listenerCounts(stream)).to.deep.equal([0, 0, 0, 0, 0])
   })
 })

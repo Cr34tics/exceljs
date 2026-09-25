@@ -6,6 +6,8 @@ const { strToU8, unzipSync, zipSync } = require('fflate')
 
 const ExcelJS = verquire('exceljs')
 const { promiseImmediate } = verquire('utils/utils')
+const unzipLimited = verquire('utils/unzip-limited')
+const ZipLimits = verquire('utils/zip-limits')
 
 const LIMIT_CODE = 'ERR_ZIP_LIMIT_EXCEEDED'
 const MB = 1024 * 1024
@@ -49,18 +51,24 @@ function withDeclaredSize(buffer, entryName, size) {
 }
 
 // A zip64 archive whose one central directory record keeps its uncompressed
-// size in a zip64 extra field that is cut off by the end of the file
-function withTruncatedZip64Size() {
+// size in a zip64 extra field: cut off by the end of the file, or holding
+// `high` as the size's upper 32 bits
+function withZip64Size(high) {
+  const truncated = high === undefined
   const name = Buffer.from('xl/media/x.bin')
-  const record = Buffer.alloc(46 + name.length + 6)
+  const record = Buffer.alloc(46 + name.length + (truncated ? 6 : 12))
   record.writeUInt32LE(0x02014b50, 0)
   record.writeUInt32LE(1, 20) // compressed size (stored)
   record.writeUInt32LE(0xffffffff, 24) // uncompressed size: see zip64 extra
   record.writeUInt16LE(name.length, 28)
-  record.writeUInt16LE(6, 30) // extra field length
+  record.writeUInt16LE(truncated ? 6 : 12, 30) // extra field length
   name.copy(record, 46)
   record.writeUInt16LE(1, 46 + name.length) // zip64 extra field id
-  record.writeUInt16LE(8, 48 + name.length) // its 8 bytes run past the end
+  record.writeUInt16LE(8, 48 + name.length) // truncated: runs past the end
+  if (!truncated) {
+    record.writeUInt32LE(1, 50 + name.length)
+    record.writeUInt32LE(high, 54 + name.length)
+  }
   const recordOffset = 56 + 20 + 22
   const zip64End = Buffer.alloc(56)
   zip64End.writeUInt32LE(0x06064b50, 0)
@@ -246,10 +254,40 @@ describe('zip decompression limits', () => {
     it('rejects a zip64 size that runs past the end of the data', async () => {
       // read as NaN, it would make every later limit check pass
       const error = await rejectionOf(
-        new ExcelJS.Workbook().xlsx.load(withTruncatedZip64Size()),
+        new ExcelJS.Workbook().xlsx.load(withZip64Size()),
       )
       expect(error, 'expected the load to fail').to.be.an.instanceOf(Error)
       expect(error.cause.message).to.equal('invalid zip data')
+    })
+
+    it('rejects a zip64 size too large to hold exactly', async () => {
+      // 2^53 + 1 would silently read as 2^53
+      const zip = withZip64Size(0x200000)
+      const loads = [
+        new ExcelJS.Workbook().xlsx.load(zip),
+        new ExcelJS.Workbook().xlsx.load(zip, {
+          maxEntries: null,
+          maxUncompressedSize: null,
+        }),
+      ]
+      for (const error of await Promise.all(loads.map(rejectionOf))) {
+        expect(error, 'expected the load to fail').to.be.an.instanceOf(Error)
+        expect(error.cause.message).to.equal('invalid zip data')
+      }
+    })
+
+    it('reads in full an entry that under-declares its size, with no limits', () => {
+      // fflate's unzipSync would silently cut it off at the declared size
+      const lying = withDeclaredSize(
+        withBomb(small, MB),
+        'xl/media/bomb.bin',
+        1,
+      )
+      const files = unzipLimited(
+        lying,
+        new ZipLimits({ maxEntries: null, maxUncompressedSize: null }),
+      )
+      expect(files['xl/media/bomb.bin'].length).to.equal(MB)
     })
 
     it('stops inflating an entry that under-declares its size', async () => {
@@ -351,6 +389,20 @@ describe('zip decompression limits', () => {
         streamRead(Readable.from([large]), { maxUncompressedSize: 64 * 1024 }),
         /maxUncompressedSize/,
       )
+    })
+
+    it('keeps the constructor limits when read() is given options', async () => {
+      const reader = new ExcelJS.stream.xlsx.WorkbookReader(
+        Readable.from([large]),
+        { maxUncompressedSize: 64 * 1024 },
+      )
+      let error
+      reader.on('error', (e) => {
+        error = e
+      })
+      reader.on('worksheet', (worksheet) => worksheet.on('row', () => {}))
+      await reader.read(undefined, { worksheets: 'emit' })
+      expect(error && error.code).to.equal(LIMIT_CODE)
     })
 
     it('rejects a worksheet buffered before the shared strings', async () => {
