@@ -52,8 +52,9 @@ function withDeclaredSize(buffer, entryName, size) {
 
 // A zip64 archive whose one central directory record keeps its uncompressed
 // size in a zip64 extra field: cut off by the end of the file, or holding
-// `high` as the size's upper 32 bits
-function withZip64Size(high) {
+// `high` as the size's upper 32 bits in a field that declares `fieldLength`
+// bytes
+function withZip64Size(high, fieldLength = 8) {
   const truncated = high === undefined
   const name = Buffer.from('xl/media/x.bin')
   const record = Buffer.alloc(46 + name.length + (truncated ? 6 : 12))
@@ -64,7 +65,8 @@ function withZip64Size(high) {
   record.writeUInt16LE(truncated ? 6 : 12, 30) // extra field length
   name.copy(record, 46)
   record.writeUInt16LE(1, 46 + name.length) // zip64 extra field id
-  record.writeUInt16LE(8, 48 + name.length) // truncated: runs past the end
+  // truncated: runs past the end
+  record.writeUInt16LE(truncated ? 8 : fieldLength, 48 + name.length)
   if (!truncated) {
     record.writeUInt32LE(1, 50 + name.length)
     record.writeUInt32LE(high, 54 + name.length)
@@ -276,6 +278,16 @@ describe('zip decompression limits', () => {
       }
     })
 
+    it('rejects a zip64 size that runs past its extra field', async () => {
+      // the field declares 4 bytes, so the 8-byte size would take in 4 bytes
+      // that aren't part of it
+      const error = await rejectionOf(
+        new ExcelJS.Workbook().xlsx.load(withZip64Size(0, 4)),
+      )
+      expect(error, 'expected the load to fail').to.be.an.instanceOf(Error)
+      expect(error.cause.message).to.equal('invalid zip data')
+    })
+
     it('reads in full an entry that under-declares its size, with no limits', () => {
       // fflate's unzipSync would silently cut it off at the declared size
       const lying = withDeclaredSize(
@@ -329,16 +341,17 @@ describe('zip decompression limits', () => {
 
     it('validates the limit options', async () => {
       const invalid = [-1, NaN, '10']
+      const options = ['maxEntries', 'maxUncompressedSize'].flatMap((name) =>
+        invalid.map((value) => ({ [name]: value })),
+      )
       const errors = await Promise.all(
-        invalid.map((maxEntries) =>
-          new ExcelJS.Workbook().xlsx.load(small, { maxEntries }).then(
-            () => undefined,
-            (error) => error,
-          ),
+        options.map((option) =>
+          rejectionOf(new ExcelJS.Workbook().xlsx.load(small, option)),
         ),
       )
       errors.forEach((error, i) => {
-        expect(error, String(invalid[i])).to.be.an.instanceOf(TypeError)
+        const label = JSON.stringify(options[i])
+        expect(error, label).to.be.an.instanceOf(TypeError)
       })
     })
 

@@ -2485,6 +2485,7 @@ Reading therefore enforces two limits by default:
 
 Both limits cover the whole archive: every entry counts, whether exceljs parses it or not (media, themes, drawings, ...).
 `xlsx.load` / `read` / `readFile` add up the uncompressed size each zip entry declares before inflating any of them, then stop inflating an entry as soon as it grows past its declared size, so an archive that lies about its sizes is rejected too.
+That includes an entry whose declared size is merely wrong, which earlier versions read cut short to that size: pass `maxUncompressedSize: null` to read such a file in full.
 The streaming reader counts the bytes it actually inflates, as it inflates them.
 It holds a worksheet in memory until it can parse it when the worksheet comes before the shared strings part (as in files written by Excel and exceljs) or shared strings aren't cached, so this limit also bounds that memory.
 
@@ -2871,6 +2872,9 @@ workbookReader.on('error', (err) => {
   // ...
 })
 ```
+
+A worksheet or hyperlinks part that fails to parse fails the whole read, so it ends with `'error'` on the workbook reader rather than `'end'`.
+An `'error'` listener on the worksheet or hyperlinks reader is still called, but no longer turns the failure into a successful read, so always listen for `'error'` on the workbook reader.
 
 # Browser[⬆](#contents)<!-- Link generated with jump2header -->
 
