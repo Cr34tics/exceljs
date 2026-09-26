@@ -375,13 +375,7 @@ export declare enum ErrorValue {
 
 export interface CellErrorValue {
   error:
-    | '#N/A'
-    | '#REF!'
-    | '#NAME?'
-    | '#DIV/0!'
-    | '#NULL!'
-    | '#VALUE!'
-    | '#NUM!'
+    '#N/A' | '#REF!' | '#NAME?' | '#DIV/0!' | '#NULL!' | '#VALUE!' | '#NUM!'
 }
 
 export interface RichText {
@@ -1230,10 +1224,7 @@ export type ConditionalFormattingRule =
   | DataBarRuleType
 
 export type RowValues =
-  | CellValue[]
-  | { [key: string]: CellValue }
-  | undefined
-  | null
+  CellValue[] | { [key: string]: CellValue } | undefined | null
 
 export interface ConditionalFormattingOptions {
   ref: string
@@ -1498,9 +1489,7 @@ export interface Worksheet {
     range: Range | string | Location,
     formula: string,
     results?:
-      | ((r: number, c: number) => string | number)
-      | number[]
-      | number[][],
+      ((r: number, c: number) => string | number) | number[] | number[][],
   ): void
 
   /**
@@ -1652,7 +1641,35 @@ export interface ZipGeneratorOptions {
  */
 export type JSZipGeneratorOptions = ZipGeneratorOptions
 
-export interface XlsxReadOptions {
+/**
+ * Limits that guard against zip decompression bombs when reading an XLSX file.
+ * Omit a limit to use the default; pass `null` or `Infinity` to disable it.
+ * Exceeding one rejects with an `Error` whose `code` is
+ * `'ERR_ZIP_LIMIT_EXCEEDED'`.
+ */
+export interface ZipReadLimits {
+  /**
+   * Maximum number of entries (files and directories) in the zip archive;
+   * `null` or `Infinity` disables the limit.
+   * @default 10000
+   */
+  maxEntries?: number | null
+  /**
+   * Maximum total uncompressed size, in bytes, of all the archive's entries,
+   * parsed or not. `xlsx.load`/`read`/`readFile` count the sizes the entries
+   * declare before inflating any, and reject an entry that inflates past its
+   * declared size; the streaming `WorkbookReader` counts the bytes it
+   * actually inflates. `null` or `Infinity` disables the limit.
+   * @default 1073741824 (1 GiB) for `xlsx.load`/`read`/`readFile`;
+   * 4294967296 (4 GiB) for the streaming `WorkbookReader`
+   *
+   * `xlsx.read`/`readFile` first buffer the whole (compressed) input, which
+   * neither limit bounds: cap the input's size yourself.
+   */
+  maxUncompressedSize?: number | null
+}
+
+export interface XlsxReadOptions extends ZipReadLimits {
   /**
    * The list of XML node names to ignore while parsing an XLSX file
    */
@@ -2279,7 +2296,7 @@ export namespace stream {
       addWorkbook(): Promise<void>
     }
 
-    interface WorkbookStreamReaderOptions {
+    interface WorkbookStreamReaderOptions extends ZipReadLimits {
       /**
        * @default 'emit'
        */
@@ -2307,9 +2324,19 @@ export namespace stream {
         input: string | import('stream').Stream,
         options: Partial<WorkbookStreamReaderOptions>,
       )
-      read(): Promise<void>
+      /**
+       * `input` and `options` replace the constructor's, except that the
+       * constructor's zip limits apply unless `options` sets them too.
+       */
+      read(
+        input?: string | import('stream').Stream,
+        options?: Partial<WorkbookStreamReaderOptions>,
+      ): Promise<void>
       [Symbol.asyncIterator](): AsyncGenerator<WorksheetReader>
-      parse(): AsyncIterator<any>
+      parse(
+        input?: string | import('stream').Stream,
+        options?: Partial<WorkbookStreamReaderOptions>,
+      ): AsyncIterator<any>
     }
 
     interface WorksheetReaderOptions {
