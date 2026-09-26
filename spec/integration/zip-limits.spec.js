@@ -302,6 +302,15 @@ describe('zip decompression limits', () => {
       expect(files['xl/media/bomb.bin'].length).to.equal(MB)
     })
 
+    it('copies a stored entry instead of keeping a view of the archive', () => {
+      const stored = Buffer.from(
+        zipSync({ 'xl/media/a.bin': [new Uint8Array(16), { level: 0 }] }),
+      )
+      const files = unzipLimited(stored, new ZipLimits({}))
+      expect(files['xl/media/a.bin'].buffer).not.to.equal(stored.buffer)
+      expect(files['xl/media/a.bin'].length).to.equal(16)
+    })
+
     it('stops inflating an entry that under-declares its size', async () => {
       // Declares 1 byte but inflates to 8 MiB: counting declared sizes alone
       // would let it through while it is inflated in full
@@ -336,6 +345,41 @@ describe('zip decompression limits', () => {
           { maxUncompressedSize: 4 * MB },
         ),
         /maxUncompressedSize/,
+      )
+    })
+
+    it('applies the limits to xlsx.readFile', async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'exceljs-limits-'))
+      try {
+        const filename = path.join(dir, 'bomb.xlsx')
+        fs.writeFileSync(filename, withBomb(small, 8 * MB))
+        await expectLimitError(
+          new ExcelJS.Workbook().xlsx.readFile(filename, {
+            maxUncompressedSize: 4 * MB,
+          }),
+          /maxUncompressedSize/,
+        )
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true })
+      }
+    })
+
+    it('treats a limit of 0 as rejecting everything', async () => {
+      await expectLimitError(
+        new ExcelJS.Workbook().xlsx.load(small, { maxEntries: 0 }),
+        /more than 0 entries/,
+      )
+      await expectLimitError(
+        new ExcelJS.Workbook().xlsx.load(small, { maxUncompressedSize: 0 }),
+        /exceeds 0 bytes/,
+      )
+      await expectLimitError(
+        streamRead(Readable.from([small]), { maxEntries: 0 }),
+        /more than 0 entries/,
+      )
+      await expectLimitError(
+        streamRead(Readable.from([small]), { maxUncompressedSize: 0 }),
+        /exceeds 0 bytes/,
       )
     })
 
@@ -547,7 +591,7 @@ describe('zip decompression limits', () => {
         fs.writeFileSync(filename, zipSync(ordered, { level: 0 }))
       })
       after(() => {
-        fs.rmSync(dir, { recursive: true, force: true })
+        if (dir) fs.rmSync(dir, { recursive: true, force: true })
       })
 
       it('after a limit error raised while iterating a worksheet', async () => {
@@ -580,6 +624,37 @@ describe('zip decompression limits', () => {
         }
         expect(reader.stream.destroyed).to.equal(true)
       })
+    })
+
+    it('rejects a for await consumer on a limit hit in hyperlinks', async () => {
+      const wb = new ExcelJS.Workbook()
+      const ws = wb.addWorksheet('sheet')
+      for (let i = 1; i <= 200; i++) {
+        ws.getCell(`A${i}`).value = {
+          text: `link ${i}`,
+          hyperlink: `https://example.com/${i}`,
+        }
+      }
+      const rels = 'xl/worksheets/_rels/sheet1.xml.rels'
+      let relsSize
+      // the sheet rels first, so the limit is crossed while they stream
+      const buffer = rezip(
+        Buffer.from(await wb.xlsx.writeBuffer()),
+        ({ [rels]: relsXml, ...rest }) => {
+          relsSize = relsXml.length
+          return { [rels]: relsXml, ...rest }
+        },
+      )
+      for (const hyperlinks of ['cache', 'emit']) {
+        // eslint-disable-next-line no-await-in-loop
+        const error = await rejectionOf(
+          streamRead(Readable.from([buffer]), {
+            hyperlinks,
+            maxUncompressedSize: relsSize - 1,
+          }),
+        )
+        expect(error && error.code, hyperlinks).to.equal(LIMIT_CODE)
+      }
     })
 
     it('reports a limit hit in hyperlinks without an unhandled rejection', async () => {
@@ -790,6 +865,63 @@ describe('zip decompression limits', () => {
       })
       expect(workbookError, 'workbook error').to.be.an.instanceOf(Error)
       expect(worksheetErrors).to.deep.equal([workbookError])
+    })
+
+    it('lets a worksheet listener iterate it during read()', async () => {
+      const reader = new ExcelJS.stream.xlsx.WorkbookReader(
+        Readable.from([large]),
+      )
+      const iterations = []
+      reader.on('worksheet', (worksheet) => {
+        iterations.push(
+          (async () => {
+            let rows = 0
+            for await (const row of worksheet) {
+              if (row) rows++
+            }
+            return rows
+          })(),
+        )
+      })
+      const error = await new Promise((resolve) => {
+        reader.on('error', resolve)
+        reader.on('end', () => resolve(undefined))
+        reader.read()
+      })
+      expect(error).to.equal(undefined)
+      expect(await Promise.all(iterations)).to.deep.equal([5000])
+    })
+
+    it('reports a worksheet error to its listener without an unhandled rejection', async () => {
+      const buffer = rezip(small, (files) => ({
+        ...files,
+        'xl/worksheets/sheet1.xml': strToU8(
+          '<worksheet><sheetData><row r="1" <<<broken',
+        ),
+      }))
+      const unhandled = []
+      const onUnhandled = (error) => unhandled.push(error)
+      process.on('unhandledRejection', onUnhandled)
+      try {
+        const reader = new ExcelJS.stream.xlsx.WorkbookReader(
+          Readable.from([buffer]),
+        )
+        const errors = []
+        for await (const { eventType, value } of reader.parse()) {
+          if (eventType === 'worksheet') {
+            value.on('error', (error) => errors.push(error))
+            value.on('row', () => {})
+            // not awaited: the listener is what hears about the error
+            value.read()
+          }
+        }
+        await promiseImmediate()
+        await promiseImmediate()
+        expect(errors).to.have.length(1)
+        expect(unhandled).to.have.length(0)
+      } finally {
+        process.removeListener('unhandledRejection', onUnhandled)
+      }
     })
 
     it('reads a worksheet only once', async () => {

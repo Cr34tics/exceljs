@@ -1662,6 +1662,9 @@ export interface ZipReadLimits {
    * actually inflates. `null` or `Infinity` disables the limit.
    * @default 1073741824 (1 GiB) for `xlsx.load`/`read`/`readFile`;
    * 4294967296 (4 GiB) for the streaming `WorkbookReader`
+   *
+   * `xlsx.read`/`readFile` first buffer the whole (compressed) input, which
+   * neither limit bounds: cap the input's size yourself.
    */
   maxUncompressedSize?: number | null
 }
@@ -2321,9 +2324,19 @@ export namespace stream {
         input: string | import('stream').Stream,
         options: Partial<WorkbookStreamReaderOptions>,
       )
-      read(): Promise<void>
+      /**
+       * `input` and `options` replace the constructor's, except that the
+       * constructor's zip limits apply unless `options` sets them too.
+       */
+      read(
+        input?: string | import('stream').Stream,
+        options?: Partial<WorkbookStreamReaderOptions>,
+      ): Promise<void>
       [Symbol.asyncIterator](): AsyncGenerator<WorksheetReader>
-      parse(): AsyncIterator<any>
+      parse(
+        input?: string | import('stream').Stream,
+        options?: Partial<WorkbookStreamReaderOptions>,
+      ): AsyncIterator<any>
     }
 
     interface WorksheetReaderOptions {
