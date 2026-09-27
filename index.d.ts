@@ -2325,8 +2325,9 @@ export namespace stream {
         options: Partial<WorkbookStreamReaderOptions>,
       )
       /**
-       * `input` and `options` replace the constructor's, except that the
-       * constructor's zip limits apply unless `options` sets them too.
+       * `input` and `options` replace the constructor's, except for the zip
+       * limits: a limit `options` sets applies to this call only, and the
+       * constructor's apply otherwise.
        */
       read(
         input?: string | import('stream').Stream,

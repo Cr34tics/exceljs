@@ -2812,8 +2812,9 @@ for await (const worksheetReader of workbookReader) {
 
 Please note that `worksheetReader` returns an array of rows rather than each row individually for performance reasons: https://github.com/nodejs/node/issues/31979
 
-The reader streams the archive once, so read each worksheet before moving on to the next one: once the loop moves on, a worksheet you skipped is discarded, and reading it later throws "Stream was already consumed".
-Hyperlinks readers are read by the workbook reader itself before it moves on, so calling their `read()` later is fine.
+The reader streams the archive once, so read each worksheet before moving on to the next one.
+Depending on the order of the parts in the file, a worksheet you skip is either discarded once the loop moves on (reading it later throws "Stream was already consumed") or held in memory until the end of the read; don't rely on either.
+With `hyperlinks: 'emit'`, the workbook reader reads each hyperlinks reader itself before it moves on, so listen for `'hyperlink'` in your `'hyperlinks'` handler or loop body: a later `read()` only waits for that read, and delivers nothing new.
 
 ###### Iterating over all events(#contents)<!-- Link generated with jump2header -->
 
