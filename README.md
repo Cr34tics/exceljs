@@ -2487,8 +2487,8 @@ Both limits cover the whole archive: every entry counts, whether exceljs parses 
 `xlsx.load` / `read` / `readFile` add up the uncompressed size each zip entry declares before inflating any of them, then stop inflating an entry as soon as it grows past its declared size, so an archive that lies about its sizes is rejected too.
 That includes an entry whose declared size is merely wrong, which earlier versions read cut short to that size: pass `maxUncompressedSize: null` to read such a file in full.
 `xlsx.read` / `readFile` first buffer the whole (compressed) input, which neither limit bounds: check the size of a stream or file you don't trust before reading it.
-The streaming reader counts the bytes it actually inflates, as it inflates them.
-It holds a worksheet in memory until it can parse it when the worksheet comes before the shared strings part (as in files written by Excel and exceljs) or shared strings aren't cached, so this limit also bounds that memory.
+The streaming reader counts the bytes it actually inflates, as they are inflated.
+It holds a worksheet in memory until the parts it depends on have been read: `xl/workbook.xml` and its rels, the shared strings unless `sharedStrings: 'ignore'`, and the styles with `styles: 'cache'`. In files written by Excel and exceljs, some of these come after the worksheets. It also buffers small entries ahead of the one being read. This limit bounds that memory too.
 
 When a limit is exceeded, the read fails with an `Error` whose `code` is `'ERR_ZIP_LIMIT_EXCEEDED'`.
 `xlsx.load` / `read` / `readFile` and the streaming reader's `for await` / `parse()` interfaces reject with it;

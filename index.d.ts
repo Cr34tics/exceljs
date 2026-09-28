@@ -1644,8 +1644,11 @@ export type JSZipGeneratorOptions = ZipGeneratorOptions
 /**
  * Limits that guard against zip decompression bombs when reading an XLSX file.
  * Omit a limit to use the default; pass `null` or `Infinity` to disable it.
- * Exceeding one rejects with an `Error` whose `code` is
- * `'ERR_ZIP_LIMIT_EXCEEDED'`.
+ * Exceeding one fails the read with an `Error` whose `code` is
+ * `'ERR_ZIP_LIMIT_EXCEEDED'`: `xlsx.load`/`read`/`readFile` and the streaming
+ * reader's `parse()` and async iteration reject with it; the streaming
+ * reader's `read()` emits it as an `'error'` event (rejecting only when
+ * nothing listens for `'error'`).
  */
 export interface ZipReadLimits {
   /**
