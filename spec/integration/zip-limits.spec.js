@@ -731,16 +731,19 @@ describe('zip decompression limits', () => {
           return { [rels]: relsXml, ...rest }
         },
       )
-      for (const hyperlinks of ['cache', 'emit']) {
-        // eslint-disable-next-line no-await-in-loop
-        const error = await rejectionOf(
-          streamRead(Readable.from([buffer]), {
-            hyperlinks,
-            maxUncompressedSize: relsSize - 1,
-          }),
-        )
-        expect(error && error.code, hyperlinks).to.equal(LIMIT_CODE)
-      }
+      const errors = await Promise.all(
+        ['cache', 'emit'].map((hyperlinks) =>
+          rejectionOf(
+            streamRead(Readable.from([buffer]), {
+              hyperlinks,
+              maxUncompressedSize: relsSize - 1,
+            }),
+          ),
+        ),
+      )
+      errors.forEach((error) => {
+        expect(error && error.code).to.equal(LIMIT_CODE)
+      })
     })
 
     it('reports a limit hit in hyperlinks without an unhandled rejection', async () => {
@@ -1160,27 +1163,31 @@ describe('zip decompression limits', () => {
       process.on('unhandledRejection', onUnhandled)
       try {
         // the worksheet buffered (as exceljs writes it) and streamed
-        for (const buffer of [broken, streamedLayout(broken)]) {
-          const reader = new ExcelJS.stream.xlsx.WorkbookReader(
-            Readable.from([buffer]),
-          )
-          const errors = []
-          // eslint-disable-next-line no-await-in-loop
-          const error = await rejectionOf(
-            (async () => {
-              for await (const { eventType, value } of reader.parse()) {
-                if (eventType === 'worksheet') {
-                  value.on('error', (e) => errors.push(e))
-                  value.on('row', () => {})
-                  // not awaited: parse() waits for it, and fails with it
-                  value.read()
+        const results = await Promise.all(
+          [broken, streamedLayout(broken)].map(async (buffer) => {
+            const reader = new ExcelJS.stream.xlsx.WorkbookReader(
+              Readable.from([buffer]),
+            )
+            const errors = []
+            const error = await rejectionOf(
+              (async () => {
+                for await (const { eventType, value } of reader.parse()) {
+                  if (eventType === 'worksheet') {
+                    value.on('error', (e) => errors.push(e))
+                    value.on('row', () => {})
+                    // not awaited: parse() waits for it, and fails with it
+                    value.read()
+                  }
                 }
-              }
-            })(),
-          )
+              })(),
+            )
+            return { error, errors }
+          }),
+        )
+        results.forEach(({ error, errors }) => {
           expect(error, 'parse() error').to.be.an.instanceOf(Error)
           expect(errors).to.deep.equal([error])
-        }
+        })
         await promiseImmediate()
         expect(unhandled).to.have.length(0)
       } finally {
