@@ -54,6 +54,22 @@ describe('iterateStream', () => {
     expect(error.message).to.match(/already consumed/)
   })
 
+  it('throws for a stream that was partly read', async () => {
+    // it would give partial data
+    const stream = new PassThrough()
+    stream.write('a')
+    stream.write('b')
+    expect(stream.read(1).toString()).to.equal('a')
+    let error
+    try {
+      await collect(stream)
+    } catch (e) {
+      error = e
+    }
+    expect(error).to.be.an.instanceOf(Error)
+    expect(error.message).to.match(/already consumed/)
+  })
+
   it('leaves the stream to be drained once the consumer stops early', async () => {
     // Otherwise draining the rest of the stream would buffer all of it, or
     // the drain would never finish

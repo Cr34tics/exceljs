@@ -2488,7 +2488,7 @@ Both limits cover the whole archive: every entry counts, whether exceljs parses 
 An entry whose declared size is merely wrong is read in full (earlier versions cut it short to that size).
 `xlsx.read` / `readFile` first buffer the whole (compressed) input, which neither limit bounds: check the size of a stream or file you don't trust before reading it.
 The streaming reader counts the bytes it actually inflates, as they are inflated.
-It holds a worksheet in memory until the parts it depends on have been read: with `sharedStrings: 'cache'` (the default), `xl/workbook.xml`, its rels, the shared strings and, with `styles: 'cache'`, the styles. In files written by Excel and exceljs, some of these come after the worksheets. With `sharedStrings: 'emit'` or `'ignore'`, it holds every worksheet until the end of the archive, as before. It also buffers a few small entries ahead of the one being read. This limit bounds that memory too.
+It holds a worksheet in memory until the parts it depends on have been read: with `sharedStrings: 'cache'` (the default), `xl/workbook.xml`, its rels, the shared strings (unless the rels list none, as for a workbook of only numbers) and, with `styles: 'cache'`, the styles. In files written by Excel and exceljs, some of these come after the worksheets. With `sharedStrings: 'emit'` or `'ignore'`, it holds every worksheet until the end of the archive, as before. With `worksheets: 'ignore'` it holds none. It also buffers a few small entries ahead of the one being read. This limit bounds that memory too.
 
 When a limit is exceeded, the read fails with an `Error` whose `code` is `'ERR_ZIP_LIMIT_EXCEEDED'`.
 `xlsx.load` / `read` / `readFile` and the streaming reader's `for await` / `parse()` interfaces reject with it;
@@ -2520,6 +2520,8 @@ Pass a larger number to raise a limit, or `null` / `Infinity` to disable it for 
 ```javascript
 await workbook.xlsx.readFile(filename, { maxUncompressedSize: null })
 ```
+
+A limit must be a non-negative number, `null` or `Infinity`. Anything else (a negative number, `NaN`, a string such as `'10'`) is a `TypeError`, not a limit error: `xlsx.load` / `read` / `readFile` reject with it, and the streaming `WorkbookReader` constructor throws it.
 
 #### Writing XLSX[⬆](#contents)<!-- Link generated with jump2header -->
 

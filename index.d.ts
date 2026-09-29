@@ -1644,6 +1644,9 @@ export type JSZipGeneratorOptions = ZipGeneratorOptions
 /**
  * Limits that guard against zip decompression bombs when reading an XLSX file.
  * Omit a limit to use the default; pass `null` or `Infinity` to disable it.
+ * A limit must be a non-negative number, `null` or `Infinity`: anything else
+ * fails the read with a `TypeError` (the streaming `WorkbookReader`'s
+ * constructor throws it).
  * Exceeding one fails the read with an `Error` whose `code` is
  * `'ERR_ZIP_LIMIT_EXCEEDED'`: `xlsx.load`/`read`/`readFile` and the streaming
  * reader's `parse()` and async iteration reject with it; the streaming
@@ -2335,10 +2338,12 @@ export namespace stream {
       )
       /**
        * `input` replaces the constructor's, and `options`, when given, replace
-       * the constructor's options entirely: pass every option you need, as
-       * those left out are unset rather than defaulted. The zip limits are the
-       * exception: a limit `options` sets applies to this call only, and the
-       * constructor's apply otherwise.
+       * the constructor's options entirely, for this call: pass every option
+       * you need, as those left out are unset rather than defaulted (so
+       * `{ maxEntries: 50 }` alone emits no worksheets). The zip limits are
+       * the exception: a limit `options` sets applies to this call, and the
+       * constructor's apply otherwise. A call without `options` uses the
+       * constructor's.
        */
       read(
         input?: string | import('stream').Stream,

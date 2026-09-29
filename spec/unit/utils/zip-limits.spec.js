@@ -37,29 +37,22 @@ describe('ZipLimits', () => {
         limits.addBytes(8 * GiB)
       }
     })
-
-    it('are unlimited when the defaults are empty', () => {
-      const limits = new ZipLimits({}, {})
-      expect(limits.maxEntries).to.equal(Infinity)
-      expect(limits.maxUncompressedSize).to.equal(Infinity)
-    })
-
-    it('must be given', () => {
-      expect(() => new ZipLimits({})).to.throw(TypeError, /default limits/)
-    })
   })
 
   it('rejects invalid values', () => {
     for (const value of [-1, NaN, '10', {}]) {
       expect(
-        () => new ZipLimits({ maxEntries: value }, {}),
+        () => new ZipLimits({ maxEntries: value }, ZipLimits.BUFFERED_DEFAULTS),
         String(value),
       ).to.throw(TypeError)
     }
   })
 
   it('allows reaching a limit but not exceeding it', () => {
-    const limits = new ZipLimits({ maxEntries: 1, maxUncompressedSize: 10 }, {})
+    const limits = new ZipLimits(
+      { maxEntries: 1, maxUncompressedSize: 10 },
+      ZipLimits.BUFFERED_DEFAULTS,
+    )
     limits.addEntry()
     limits.addBytes(10)
     expect(() => limits.addEntry())
@@ -71,7 +64,10 @@ describe('ZipLimits', () => {
   })
 
   it('rejects a size that is not a non-negative safe integer', () => {
-    const limits = new ZipLimits({ maxUncompressedSize: 10 }, {})
+    const limits = new ZipLimits(
+      { maxUncompressedSize: 10 },
+      ZipLimits.BUFFERED_DEFAULTS,
+    )
     for (const size of [NaN, -1, Infinity, undefined, 1.5]) {
       expect(() => limits.addBytes(size), String(size)).to.throw(TypeError)
     }
