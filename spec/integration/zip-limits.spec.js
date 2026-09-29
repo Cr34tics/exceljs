@@ -397,7 +397,7 @@ describe('zip decompression limits', () => {
       )
     })
 
-    it('stops inflating an entry that under-declares its size', async () => {
+    it('counts what an entry that under-declares its size inflates to', async () => {
       // Declares 1 byte but inflates to 8 MiB: counting declared sizes alone
       // would let it through while it is inflated in full
       const lying = withDeclaredSize(
@@ -406,13 +406,33 @@ describe('zip decompression limits', () => {
         1,
       )
       await expectLimitError(
-        new ExcelJS.Workbook().xlsx.load(lying),
-        /xl\/media\/bomb\.bin inflates to more than the 1 bytes it declares/,
+        new ExcelJS.Workbook().xlsx.load(lying, {
+          maxUncompressedSize: 4 * MB,
+        }),
+        /maxUncompressedSize/,
       )
-      // with no size limit the entry is read in full, as before
-      await new ExcelJS.Workbook().xlsx.load(lying, {
-        maxUncompressedSize: null,
-      })
+      // within the limit, its declared size being wrong doesn't matter
+      const files = unzipLimited(
+        lying,
+        new ZipLimits({}, ZipLimits.BUFFERED_DEFAULTS),
+      )
+      expect(files['xl/media/bomb.bin'].length).to.equal(8 * MB)
+    })
+
+    it('charges a deflated entry its uncompressed size only', () => {
+      // random bytes deflate to a little more than their own size
+      const random = new Uint8Array(100000).map(() =>
+        Math.floor(Math.random() * 256),
+      )
+      const zip = Buffer.from(zipSync({ 'xl/media/r.bin': random }))
+      const files = unzipLimited(
+        zip,
+        new ZipLimits(
+          { maxUncompressedSize: 100000 },
+          ZipLimits.BUFFERED_DEFAULTS,
+        ),
+      )
+      expect(files['xl/media/r.bin'].length).to.equal(100000)
     })
 
     it('rejects an archive with more than maxEntries entries', async () => {
@@ -1351,6 +1371,129 @@ describe('zip decompression limits', () => {
         })(),
       )
       expect(error).to.be.an.instanceOf(TypeError)
+    })
+
+    it('fails an iteration the reader moved on from, rather than ending it empty', async () => {
+      const wb = new ExcelJS.Workbook()
+      for (const name of ['a', 'b', 'c']) {
+        const ws = wb.addWorksheet(name)
+        for (let i = 1; i <= 2000; i++) ws.addRow([i, `row ${i}`])
+      }
+      const buffer = streamedLayout(Buffer.from(await wb.xlsx.writeBuffer()))
+      const jobs = []
+      for await (const worksheet of new ExcelJS.stream.xlsx.WorkbookReader(
+        Readable.from([buffer]),
+      )) {
+        // iterated in the background while the loop moves on
+        jobs.push(
+          (async () => {
+            let rows = 0
+            // eslint-disable-next-line no-unused-vars
+            for await (const row of worksheet) rows++
+            return rows
+          })().catch((error) => error),
+        )
+      }
+      const results = await Promise.all(jobs)
+      results.forEach((result) => {
+        if (result instanceof Error) {
+          expect(result.message).to.match(/already consumed/)
+        } else {
+          expect(result).to.equal(2000)
+        }
+      })
+    })
+
+    it('forgets what it read of a previous archive', async () => {
+      const named = async (name) => {
+        const wb = new ExcelJS.Workbook()
+        wb.addWorksheet(name).getCell('A1').value = name
+        return Buffer.from(await wb.xlsx.writeBuffer())
+      }
+      const first = streamedLayout(await named('first'))
+      // the worksheet before everything it depends on
+      const second = rezip(await named('second'), (files) => {
+        const sheet = 'xl/worksheets/sheet1.xml'
+        const { [sheet]: sheetXml, ...rest } = files
+        return { [sheet]: sheetXml, ...rest }
+      })
+      const reader = new ExcelJS.stream.xlsx.WorkbookReader(
+        Readable.from([first]),
+      )
+      const names = []
+      const readNames = async (input) => {
+        for await (const { eventType, value } of reader.parse(input)) {
+          if (eventType === 'worksheet') {
+            names.push(value.name)
+            // eslint-disable-next-line no-unused-vars
+            for await (const row of value) {
+              // read the rows
+            }
+          }
+        }
+      }
+      await readNames()
+      await readNames(Readable.from([second]))
+      expect(names).to.deep.equal(['first', 'second'])
+    })
+
+    it('holds the input back while the consumer is behind', async () => {
+      const wb = new ExcelJS.Workbook()
+      const ws = wb.addWorksheet('sheet')
+      for (let i = 1; i <= 50; i++) ws.addRow([i, 'row'])
+      const buffer = rezip(
+        streamedLayout(Buffer.from(await wb.xlsx.writeBuffer())),
+        (files) => {
+          const padded = { ...files }
+          for (let i = 0; i < 3000; i++) {
+            padded[`xl/media/pad${i}`] = [strToU8('x'), { level: 0 }]
+          }
+          return padded
+        },
+      )
+      let offset = 0
+      const input = new Readable({
+        read() {
+          setImmediate(() =>
+            this.push(
+              offset < buffer.length
+                ? buffer.subarray(offset, (offset += 4096))
+                : null,
+            ),
+          )
+        },
+      })
+      let readWhileBehind
+      for await (const worksheet of new ExcelJS.stream.xlsx.WorkbookReader(
+        input,
+      )) {
+        for await (const row of worksheet) {
+          expect(row).to.be.ok()
+          await new Promise((resolve) => setTimeout(resolve, 2))
+        }
+        readWhileBehind = offset
+      }
+      expect(readWhileBehind).to.be.below(buffer.length / 2)
+    })
+
+    it('emits hyperlinks before their worksheet unless shared strings are cached', async () => {
+      const wb = new ExcelJS.Workbook()
+      wb.addWorksheet('sheet').getCell('A1').value = {
+        text: 'link',
+        hyperlink: 'https://example.com',
+      }
+      // the workbook parts first, as Excel writes them, then the sheet
+      const buffer = streamedLayout(Buffer.from(await wb.xlsx.writeBuffer()))
+      const order = []
+      for await (const { eventType } of new ExcelJS.stream.xlsx.WorkbookReader(
+        Readable.from([buffer]),
+        { hyperlinks: 'emit', sharedStrings: 'ignore' },
+      ).parse()) {
+        if (eventType === 'worksheet' || eventType === 'hyperlinks') {
+          order.push(eventType)
+        }
+      }
+      expect(order).to.deep.equal(['hyperlinks', 'worksheet'])
     })
 
     it('accepts null options', async () => {

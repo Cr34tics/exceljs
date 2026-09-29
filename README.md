@@ -2484,11 +2484,11 @@ Reading therefore enforces two limits by default:
 | `maxUncompressedSize` | 1 GiB                             | 4 GiB                      |
 
 Both limits cover the whole archive: every entry counts, whether exceljs parses it or not (media, themes, drawings, ...).
-`xlsx.load` / `read` / `readFile` add up the uncompressed size each zip entry declares before inflating any of them, then stop inflating an entry as soon as it grows past its declared size, so an archive that lies about its sizes is rejected too.
-That includes an entry whose declared size is merely wrong, which earlier versions read cut short to that size: pass `maxUncompressedSize: null` to read such a file in full.
+`xlsx.load` / `read` / `readFile` add up the uncompressed size each zip entry declares before inflating any of them, then also count what each entry actually inflates to, so an archive that lies about its sizes is rejected too.
+An entry whose declared size is merely wrong is read in full (earlier versions cut it short to that size).
 `xlsx.read` / `readFile` first buffer the whole (compressed) input, which neither limit bounds: check the size of a stream or file you don't trust before reading it.
 The streaming reader counts the bytes it actually inflates, as they are inflated.
-It holds a worksheet in memory until the parts it depends on have been read: `xl/workbook.xml` and its rels, the shared strings unless `sharedStrings: 'ignore'`, and the styles with `styles: 'cache'`. In files written by Excel and exceljs, some of these come after the worksheets. It also buffers small entries ahead of the one being read. This limit bounds that memory too.
+It holds a worksheet in memory until the parts it depends on have been read: with `sharedStrings: 'cache'` (the default), `xl/workbook.xml`, its rels, the shared strings and, with `styles: 'cache'`, the styles. In files written by Excel and exceljs, some of these come after the worksheets. With `sharedStrings: 'emit'` or `'ignore'`, it holds every worksheet until the end of the archive, as before. It also buffers a few small entries ahead of the one being read. This limit bounds that memory too.
 
 When a limit is exceeded, the read fails with an `Error` whose `code` is `'ERR_ZIP_LIMIT_EXCEEDED'`.
 `xlsx.load` / `read` / `readFile` and the streaming reader's `for await` / `parse()` interfaces reject with it;
@@ -2813,7 +2813,7 @@ for await (const worksheetReader of workbookReader) {
 Please note that `worksheetReader` returns an array of rows rather than each row individually for performance reasons: https://github.com/nodejs/node/issues/31979
 
 The reader streams the archive once, so read each worksheet before moving on to the next one.
-Depending on the order of the parts in the file, a worksheet you skip is either discarded once the loop moves on (reading it later throws "Stream was already consumed") or held in memory until the end of the read; don't rely on either.
+Depending on the order of the parts in the file, a worksheet you skip, or are still iterating in the background when the loop moves on, is either discarded (reading or iterating it then throws "Stream was already consumed") or held in memory until the end of the read; don't rely on either.
 With `hyperlinks: 'emit'`, the workbook reader reads each hyperlinks reader itself before it moves on, so listen for `'hyperlink'` in your `'hyperlinks'` handler or loop body: a later `read()` only waits for that read, and delivers nothing new.
 
 ###### Iterating over all events(#contents)<!-- Link generated with jump2header -->
@@ -2877,6 +2877,9 @@ workbookReader.on('error', (err) => {
 
 A worksheet or hyperlinks part that fails to parse fails the whole read, so it ends with `'error'` on the workbook reader rather than `'end'`.
 An `'error'` listener on the worksheet or hyperlinks reader is still called, but no longer turns the failure into a successful read, so always listen for `'error'` on the workbook reader.
+So does an archive that ends before its end-of-central-directory record, even between two entries (earlier versions read it as a shorter workbook).
+After an error, or when you stop reading early, the reader closes a file it opened itself but leaves a stream you passed in open: destroy it yourself.
+Emitted hyperlink relationships have type `RelationshipType.Hyperlink` (earlier versions said `RelationshipType.Styles`).
 
 # Browser[⬆](#contents)<!-- Link generated with jump2header -->
 

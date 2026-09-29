@@ -1659,15 +1659,14 @@ export interface ZipReadLimits {
   maxEntries?: number | null
   /**
    * Maximum total uncompressed size, in bytes, of all the archive's entries,
-   * parsed or not. `xlsx.load`/`read`/`readFile` count the sizes the entries
-   * declare before inflating any, and reject an entry that inflates past its
-   * declared size; the streaming `WorkbookReader` counts the bytes it
-   * actually inflates. `null` or `Infinity` disables the limit.
-   * @default 1073741824 (1 GiB) for `xlsx.load`/`read`/`readFile`;
-   * 4294967296 (4 GiB) for the streaming `WorkbookReader`
+   * parsed or not. Both readers count the bytes entries actually inflate to;
+   * `xlsx.load`/`read`/`readFile` also check the sizes the entries declare
+   * before inflating any. `null` or `Infinity` disables the limit.
    *
    * `xlsx.read`/`readFile` first buffer the whole (compressed) input, which
    * neither limit bounds: cap the input's size yourself.
+   * @default 1073741824 (1 GiB) for `xlsx.load`/`read`/`readFile`;
+   * 4294967296 (4 GiB) for the streaming `WorkbookReader`
    */
   maxUncompressedSize?: number | null
 }
@@ -1703,7 +1702,8 @@ export interface Xlsx {
   ): Promise<Workbook>
 
   /**
-   * load from an array buffer
+   * load from an array buffer. Don't modify `buffer` until the returned
+   * promise settles: parts stored uncompressed are read from it as they are.
    * @param buffer
    */
   load(buffer: Buffer, options?: Partial<XlsxReadOptions>): Promise<Workbook>
@@ -2322,14 +2322,22 @@ export namespace stream {
       entries?: 'emit' | 'ignore'
     }
 
+    type EventEmitter = import('events').EventEmitter
+
+    // Also an EventEmitter: read() reports through 'worksheet', 'error',
+    // 'end' and other events
+    interface WorkbookReader extends EventEmitter {}
+
     class WorkbookReader extends Workbook {
       constructor(
-        input: string | import('stream').Stream,
-        options: Partial<WorkbookStreamReaderOptions>,
+        input?: string | import('stream').Stream | null,
+        options?: Partial<WorkbookStreamReaderOptions> | null,
       )
       /**
-       * `input` and `options` replace the constructor's, except for the zip
-       * limits: a limit `options` sets applies to this call only, and the
+       * `input` replaces the constructor's, and `options`, when given, replace
+       * the constructor's options entirely: pass every option you need, as
+       * those left out are unset rather than defaulted. The zip limits are the
+       * exception: a limit `options` sets applies to this call only, and the
        * constructor's apply otherwise.
        */
       read(
@@ -2337,10 +2345,11 @@ export namespace stream {
         options?: Partial<WorkbookStreamReaderOptions>,
       ): Promise<void>
       [Symbol.asyncIterator](): AsyncGenerator<WorksheetReader>
+      /** Takes `input` and `options` as read() does. */
       parse(
         input?: string | import('stream').Stream,
         options?: Partial<WorkbookStreamReaderOptions>,
-      ): AsyncIterator<any>
+      ): AsyncGenerator<any>
     }
 
     interface WorksheetReaderOptions {
@@ -2354,7 +2363,7 @@ export namespace stream {
       constructor(options: WorksheetReaderOptions)
       read(): Promise<void>
       [Symbol.asyncIterator](): AsyncGenerator<Row>
-      parse(): AsyncIterator<Array<any>>
+      parse(): AsyncGenerator<Array<any>>
       dimensions(): number
       columns(): number
       getColumn(c: number): Column
