@@ -2488,7 +2488,12 @@ Both limits cover the whole archive: every entry counts, whether exceljs parses 
 An entry whose declared size is merely wrong is read in full (earlier versions cut it short to that size).
 `xlsx.read` / `readFile` first buffer the whole (compressed) input, which neither limit bounds: check the size of a stream or file you don't trust before reading it.
 The streaming reader counts the bytes it actually inflates, as they are inflated.
-It holds a worksheet in memory until the parts it depends on have been read: with `sharedStrings: 'cache'` (the default), `xl/workbook.xml`, its rels, the shared strings (unless the rels list none, as for a workbook of only numbers) and, with `styles: 'cache'`, the styles. In files written by Excel and exceljs, some of these come after the worksheets. With `sharedStrings: 'emit'` or `'ignore'`, it holds every worksheet until the end of the archive, as before. With `worksheets: 'ignore'` it holds none. It also buffers a few small entries ahead of the one being read. This limit bounds that memory too.
+It holds a worksheet in memory until the parts it depends on have been read: with `sharedStrings: 'cache'` (the default), `xl/workbook.xml`, its rels, the shared strings (unless the rels list none, as for a workbook of only numbers) and, with `styles: 'cache'`, the styles. In files written by Excel and exceljs, some of these come after the worksheets. With `sharedStrings: 'emit'` or `'ignore'`, it holds every worksheet until the end of the archive, as before. With `worksheets: 'ignore'` it holds none. Once a few entries are queued it stops reading its input until it catches up, but it can't take back what it has already received, so how far it gets ahead depends on the size of the input's chunks: a whole archive passed as one chunk is parsed ahead in full.
+
+The defaults are a ceiling, not a memory budget: what they let through can still cost a lot of memory.
+`xlsx.load` / `read` / `readFile` need several times the uncompressed size in memory (about 3x for media, 13-20x for worksheet XML), and the streaming reader may hold up to `maxUncompressedSize` of worksheets it buffers.
+On a service that reads untrusted uploads, set `maxUncompressedSize` to what you can afford, e.g. `100 * 1024 * 1024`.
+(An XML part over 512 MiB can't be read in any case: it fails with V8's `ERR_STRING_TOO_LONG`.)
 
 When a limit is exceeded, the read fails with an `Error` whose `code` is `'ERR_ZIP_LIMIT_EXCEEDED'`.
 `xlsx.load` / `read` / `readFile` and the streaming reader's `for await` / `parse()` interfaces reject with it;
@@ -2515,7 +2520,8 @@ workbookReader.on('error', (error) => {
 await workbookReader.read()
 ```
 
-Pass a larger number to raise a limit, or `null` / `Infinity` to disable it for trusted input:
+Pass a larger number to raise a limit, or `null` / `Infinity` to disable it for trusted input.
+That disables the limits only: `xlsx.load` / `read` / `readFile` still reject some corrupt archives that earlier versions read (a central directory with a bad signature, or records that run past the end of the data).
 
 ```javascript
 await workbook.xlsx.readFile(filename, { maxUncompressedSize: null })
@@ -2816,6 +2822,12 @@ Please note that `worksheetReader` returns an array of rows rather than each row
 
 The reader streams the archive once, so read each worksheet before moving on to the next one.
 Depending on the order of the parts in the file, a worksheet you skip, or are still iterating in the background when the loop moves on, is either discarded (reading or iterating it then throws "Stream was already consumed") or held in memory until the end of the read; don't rely on either.
+A worksheet can be read only once: iterating it a second time throws "Worksheet was already read" (earlier versions yielded no rows).
+A worksheet whose XML is cut off fails the read (earlier versions read it as a shorter sheet).
+
+Options given to `read()` / `parse()` that set only zip limits (e.g. `{ maxUncompressedSize }`) apply those limits to that call and keep the reader's other options.
+Any other options replace the reader's options entirely, as before: pass every option you need, as those left out are unset rather than defaulted.
+A limit given to a call applies to that call only; otherwise the constructor's limits apply.
 With `hyperlinks: 'emit'`, the workbook reader reads each hyperlinks reader itself before it moves on, so listen for `'hyperlink'` in your `'hyperlinks'` handler or loop body: a later `read()` only waits for that read, and delivers nothing new.
 
 ###### Iterating over all events(#contents)<!-- Link generated with jump2header -->
@@ -2860,6 +2872,7 @@ workbookReader.read()
 workbookReader.on('worksheet', (worksheet) => {
   worksheet.on('row', (row) => {})
 })
+// or iterate it in the listener instead (see below)
 
 workbookReader.on('shared-strings', (sharedString) => {
   // ...
@@ -2876,6 +2889,9 @@ workbookReader.on('error', (err) => {
   // ...
 })
 ```
+
+A `'worksheet'` listener may iterate the worksheet instead of listening for `'row'`: `read()` then waits for the iteration before it moves on. Start iterating before any `await` in the listener (otherwise `read()` has already started reading the worksheet, and the iteration throws), and finish the iteration or break out of it: an iterator left suspended, e.g. after peeking at the first row with `next()`, stalls `read()` until you call its `return()`.
+With `entries: 'emit'`, a worksheet that isn't held in memory (see [Zip bomb limits](#zip-bomb-limits)) is reported at its place in the archive, which may be before parts that come after it.
 
 A worksheet or hyperlinks part that fails to parse fails the whole read, so it ends with `'error'` on the workbook reader rather than `'end'`.
 An `'error'` listener on the worksheet or hyperlinks reader is still called, but no longer turns the failure into a successful read, so always listen for `'error'` on the workbook reader.

@@ -455,6 +455,28 @@ describe('zip decompression limits', () => {
       }
     })
 
+    it('reads in full a small incompressible entry that under-declares its size', () => {
+      // deflated as a stored block, which a too small output buffer can't cut
+      // off: fflate throws instead
+      const random = new Uint8Array(5000).map(() =>
+        Math.floor(Math.random() * 256),
+      )
+      const zip = rezip(small, (files) => ({
+        ...files,
+        'xl/media/r.bin': random,
+      }))
+      for (const declared of [4998, 1, 0]) {
+        const files = unzipLimited(
+          withDeclaredSize(zip, 'xl/media/r.bin', declared),
+          new ZipLimits({}, ZipLimits.BUFFERED_DEFAULTS),
+        )
+        expect(
+          Buffer.from(files['xl/media/r.bin']),
+          String(declared),
+        ).to.deep.equal(Buffer.from(random))
+      }
+    })
+
     it('reads in full, or counts, a large entry that under-declares its size', async () => {
       // incompressible, so its compressed data is fed to the inflater in
       // several chunks, the output buffer growing past the declared size
@@ -1893,6 +1915,153 @@ describe('zip decompression limits', () => {
         expect(error.message).to.match(/already consumed/)
       })
       expect(unhandled).to.have.length(0)
+    })
+
+    it('rejects a worksheet whose XML is cut off', async () => {
+      const buffer = rezip(large, (files) => {
+        const xml = Buffer.from(files['xl/worksheets/sheet1.xml']).toString()
+        // after the second row
+        const cut = xml.indexOf('</row>', xml.indexOf('</row>') + 1) + 6
+        return {
+          ...files,
+          'xl/worksheets/sheet1.xml': strToU8(xml.slice(0, cut)),
+        }
+      })
+      const streamed = await rejectionOf(streamRead(Readable.from([buffer])))
+      expect(streamed, 'streamed read').to.be.an.instanceOf(Error)
+      expect(streamed.message).to.match(/unclosed tag/)
+      const loaded = await rejectionOf(new ExcelJS.Workbook().xlsx.load(buffer))
+      expect(loaded, 'load()').to.be.an.instanceOf(Error)
+    })
+
+    it('waits for shared strings whose relationship has another type URI', async () => {
+      const wb = new ExcelJS.Workbook()
+      wb.addWorksheet('sheet').addRow(['alpha', 'beta', 1])
+      // Strict OOXML's type URI, and the order Excel writes the parts in
+      const buffer = rezip(
+        Buffer.from(await wb.xlsx.writeBuffer()),
+        (files) => {
+          const {
+            'xl/workbook.xml': workbook,
+            'xl/_rels/workbook.xml.rels': rels,
+            'xl/worksheets/sheet1.xml': sheet,
+            'xl/sharedStrings.xml': strings,
+            ...rest
+          } = files
+          const strictRels = Buffer.from(rels)
+            .toString()
+            .replace(
+              'http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings',
+              'http://purl.oclc.org/ooxml/officeDocument/relationships/sharedStrings',
+            )
+          return {
+            'xl/workbook.xml': workbook,
+            'xl/_rels/workbook.xml.rels': strToU8(strictRels),
+            'xl/worksheets/sheet1.xml': sheet,
+            'xl/sharedStrings.xml': strings,
+            ...rest,
+          }
+        },
+      )
+      const values = []
+      for await (const worksheet of new ExcelJS.stream.xlsx.WorkbookReader(
+        Readable.from([buffer]),
+      )) {
+        for await (const row of worksheet) {
+          values.push([1, 2, 3].map((col) => row.getCell(col).value))
+        }
+      }
+      expect(values).to.deep.equal([['alpha', 'beta', 1]])
+    })
+
+    it('reads with the limits disabled', async () => {
+      for (const off of [null, Infinity]) {
+        expect(
+          // eslint-disable-next-line no-await-in-loop
+          await streamRead(Readable.from([large]), {
+            maxEntries: off,
+            maxUncompressedSize: off,
+          }),
+          String(off),
+        ).to.equal(5000)
+      }
+    })
+
+    it('keeps the reader options when a call gives only limits', async () => {
+      const parsed = new ExcelJS.stream.xlsx.WorkbookReader(
+        Readable.from([small]),
+      )
+      let parsedRows = 0
+      for await (const { eventType, value } of parsed.parse(undefined, {
+        maxUncompressedSize: 1e9,
+      })) {
+        if (eventType === 'worksheet') {
+          // eslint-disable-next-line no-unused-vars
+          for await (const row of value) parsedRows++
+        }
+      }
+      expect(parsedRows).to.equal(1)
+      const read = new ExcelJS.stream.xlsx.WorkbookReader(
+        Readable.from([small]),
+      )
+      let readRows = 0
+      read.on('worksheet', (worksheet) => worksheet.on('row', () => readRows++))
+      const error = await new Promise((resolve) => {
+        read.on('error', resolve)
+        read.on('end', () => resolve(undefined))
+        read.read(undefined, { maxEntries: 50 })
+      })
+      expect(error).to.equal(undefined)
+      expect(readRows).to.equal(1)
+    })
+
+    it('reads with options assigned to reader.options', async () => {
+      const reader = new ExcelJS.stream.xlsx.WorkbookReader(
+        Readable.from([small]),
+      )
+      reader.options = { worksheets: 'emit', sharedStrings: 'ignore' }
+      const values = []
+      for await (const worksheet of reader) {
+        for await (const row of worksheet) values.push(row.getCell(1).value)
+      }
+      expect(values).to.deep.equal([{ sharedString: 0 }])
+    })
+
+    it('reads an object-mode input that pushes empty chunks', async () => {
+      const empty = Buffer.alloc(0)
+      const inputs = [
+        [empty, small],
+        [small.subarray(0, 100), empty, small.subarray(100)],
+        [small, empty],
+      ]
+      for (const chunks of inputs) {
+        expect(
+          // eslint-disable-next-line no-await-in-loop
+          await withinTime(streamRead(Readable.from(chunks)), 'the read'),
+        ).to.equal(1)
+      }
+    })
+
+    it('says why a worksheet listener that awaits first cannot iterate it', async () => {
+      const reader = new ExcelJS.stream.xlsx.WorkbookReader(
+        Readable.from([large]),
+      )
+      const iterations = []
+      reader.on('worksheet', (worksheet) => {
+        iterations.push(
+          (async () => {
+            await null
+            // eslint-disable-next-line no-unused-vars
+            for await (const row of worksheet) {
+              // read the rows
+            }
+          })().catch((error) => error),
+        )
+      })
+      expect(await settle(reader)).to.equal(undefined)
+      const [error] = await Promise.all(iterations)
+      expect(error, 'iteration error').to.be.an.instanceOf(Error)
+      expect(error.message).to.match(/before any await/)
     })
 
     it('stops reading a caller-supplied stream when the consumer stops early', async function () {

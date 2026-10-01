@@ -1,3 +1,5 @@
+import { EventEmitter } from 'events'
+
 declare interface Buffer extends ArrayBuffer {}
 
 export declare enum RelationshipType {
@@ -2325,25 +2327,24 @@ export namespace stream {
       entries?: 'emit' | 'ignore'
     }
 
-    type EventEmitter = import('events').EventEmitter
-
-    // Also an EventEmitter: read() reports through 'worksheet', 'error',
-    // 'end' and other events
-    interface WorkbookReader extends EventEmitter {}
-
-    class WorkbookReader extends Workbook {
+    /**
+     * Reads a workbook as a stream. read() reports through events
+     * ('worksheet', 'shared-strings', 'hyperlinks', 'entry', 'error', 'end');
+     * parse() and async iteration yield instead. It is not a Workbook.
+     */
+    class WorkbookReader extends EventEmitter {
       constructor(
         input?: string | import('stream').Stream | null,
         options?: Partial<WorkbookStreamReaderOptions> | null,
       )
+      /** The options a read() or parse() given none uses */
+      options: Partial<WorkbookStreamReaderOptions>
       /**
-       * `input` replaces the constructor's, and `options`, when given, replace
-       * the constructor's options entirely, for this call: pass every option
-       * you need, as those left out are unset rather than defaulted (so
-       * `{ maxEntries: 50 }` alone emits no worksheets). The zip limits are
-       * the exception: a limit `options` sets applies to this call, and the
-       * constructor's apply otherwise. A call without `options` uses the
-       * constructor's.
+       * `input` replaces the constructor's. `options` that set only zip limits
+       * apply those limits to this call. Any other `options` replace the
+       * reader's options entirely: pass every option you need, as those left
+       * out are unset rather than defaulted. Either way, a limit `options` sets
+       * applies to this call only, and the constructor's apply otherwise.
        */
       read(
         input?: string | import('stream').Stream,
@@ -2358,20 +2359,53 @@ export namespace stream {
     }
 
     interface WorksheetReaderOptions {
-      workbook: Workbook
-      id: number
-      entry: import('stream').Stream
-      options: WorkbookStreamReaderOptions
+      workbook: WorkbookReader
+      id: number | string
+      iterator: AsyncIterable<Buffer | Uint8Array | string>
+      options: Partial<WorkbookStreamReaderOptions>
     }
 
-    class WorksheetReader {
+    /**
+     * A streamed worksheet. Read it once, before the workbook reader moves
+     * on: either read() it, which emits 'row' events then 'finished' (and
+     * 'error' to its listeners), or iterate it. A listener that starts
+     * iterating it must finish, or break out of, the iteration (or call the
+     * iterator's return()): the workbook reader's read() waits for it.
+     */
+    class WorksheetReader extends EventEmitter {
       constructor(options: WorksheetReaderOptions)
+      id: number | string
+      name: string
+      state?: string
       read(): Promise<void>
       [Symbol.asyncIterator](): AsyncGenerator<Row>
       parse(): AsyncGenerator<Array<any>>
       dimensions(): number
       columns(): number
       getColumn(c: number): Column
+    }
+
+    interface StreamedHyperlink {
+      type: RelationshipType
+      rId: string
+      target: string
+      targetMode?: string
+    }
+
+    /**
+     * A worksheet's hyperlinks, handed out with `hyperlinks: 'emit'`. read()
+     * emits a 'hyperlink' event for each, then 'finished'. The workbook
+     * reader reads them before moving on, so listen for 'hyperlink' in its
+     * 'hyperlinks' handler; a later read() shares that read.
+     */
+    class HyperlinkReader extends EventEmitter {
+      id: number | string
+      read(): Promise<void>
+      on(
+        event: 'hyperlink',
+        listener: (hyperlink: StreamedHyperlink) => void,
+      ): this
+      on(event: string | symbol, listener: (...args: any[]) => void): this
     }
   }
 }
