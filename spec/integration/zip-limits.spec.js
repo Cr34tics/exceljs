@@ -1703,6 +1703,34 @@ describe('zip decompression limits', () => {
       expect(loaded, 'load()').to.be.an.instanceOf(Error)
     })
 
+    it('rejects a worksheet cut off before its first element', async () => {
+      const xml = Buffer.from(
+        unzipSync(large)['xl/worksheets/sheet1.xml'],
+      ).toString()
+      const root = xml.indexOf('<worksheet')
+      const cuts = {
+        'only the declaration': xml.slice(0, root),
+        'inside the root tag': xml.slice(0, root + 20),
+      }
+      const errors = await Promise.all(
+        Object.values(cuts).map((cut) =>
+          rejectionOf(
+            streamRead(
+              Readable.from([
+                rezip(large, (files) => ({
+                  ...files,
+                  'xl/worksheets/sheet1.xml': strToU8(cut),
+                })),
+              ]),
+            ),
+          ),
+        ),
+      )
+      Object.keys(cuts).forEach((name, i) => {
+        expect(errors[i], name).to.be.an.instanceOf(Error)
+      })
+    })
+
     it('waits for shared strings whose relationship has another type URI', async () => {
       const wb = new ExcelJS.Workbook()
       wb.addWorksheet('sheet').addRow(['alpha', 'beta', 1])
