@@ -73,6 +73,27 @@ describe('unzipLimited', () => {
         expect(Buffer.from(files['x.bin'])).to.deep.equal(Buffer.from(content))
       })
 
+      it('reads a small last entry that fits the limit exactly', () => {
+        // the last entry starts with less than 64 bytes of the limit left
+        const zip = zipOf({
+          'a.bin': strToU8('a'.repeat(100)),
+          'b.bin': strToU8('b'.repeat(30)),
+        })
+        const files = unzip(zip, limits({ maxUncompressedSize: 130 }))
+        expect(files['b.bin'].length).to.equal(30)
+      })
+
+      it('rejects a small entry that lies past the limit with the limit error', () => {
+        const lying = withDeclaredSize(
+          zipOf({ 'a.bin': strToU8('a'.repeat(1000)) }),
+          'a.bin',
+          1,
+        )
+        expect(() => unzip(lying, limits({ maxUncompressedSize: 40 })))
+          .to.throw(Error, /maxUncompressedSize/)
+          .with.property('code', ZipLimits.ERROR_CODE)
+      })
+
       it('stops inflating at the end of the deflate data', function () {
         this.timeout(10000)
         // a.bin's record claims the next entry's 16 MiB as its compressed data:
