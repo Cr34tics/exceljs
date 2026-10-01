@@ -17,6 +17,15 @@ async function collect(stream) {
   return chunks
 }
 
+async function rejectionOf(promise) {
+  try {
+    await promise
+  } catch (error) {
+    return error
+  }
+  return undefined
+}
+
 describe('iterateStream', () => {
   it('yields each chunk until the stream ends', async () => {
     const stream = new PassThrough()
@@ -29,12 +38,7 @@ describe('iterateStream', () => {
     const stream = new PassThrough()
     stream.on('error', () => {})
     stream.destroy(new Error('boom'))
-    let error
-    try {
-      await collect(stream)
-    } catch (e) {
-      error = e
-    }
+    const error = await rejectionOf(collect(stream))
     expect(error).to.be.an.instanceOf(Error)
     expect(error.message).to.equal('boom')
   })
@@ -44,12 +48,7 @@ describe('iterateStream', () => {
     stream.end('a')
     stream.resume()
     await finished(stream)
-    let error
-    try {
-      await collect(stream)
-    } catch (e) {
-      error = e
-    }
+    const error = await rejectionOf(collect(stream))
     expect(error).to.be.an.instanceOf(Error)
     expect(error.message).to.match(/already consumed/)
   })
@@ -60,12 +59,7 @@ describe('iterateStream', () => {
     stream.write('a')
     stream.write('b')
     expect(stream.read(1).toString()).to.equal('a')
-    let error
-    try {
-      await collect(stream)
-    } catch (e) {
-      error = e
-    }
+    const error = await rejectionOf(collect(stream))
     expect(error).to.be.an.instanceOf(Error)
     expect(error.message).to.match(/already consumed/)
   })

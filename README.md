@@ -2898,6 +2898,7 @@ An `'error'` listener on the worksheet or hyperlinks reader is still called, but
 So does an archive that ends before its end-of-central-directory record, even between two entries (earlier versions read it as a shorter workbook).
 After an error, or when you stop reading early, the reader closes a file it opened itself but leaves a stream you passed in open: destroy it yourself.
 Emitted hyperlink relationships have type `RelationshipType.Hyperlink` (earlier versions said `RelationshipType.Styles`).
+With `sharedStrings: 'emit'`, `parse()` yields each shared string as `{ eventType: 'shared-strings', value: { index, text } }`, and `read()` emits it as a `'shared-strings'` event (earlier versions yielded a bare `{ index, text }` and never emitted the event).
 
 # Browser[⬆](#contents)<!-- Link generated with jump2header -->
 

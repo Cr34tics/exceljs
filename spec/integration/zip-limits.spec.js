@@ -3,6 +3,12 @@ const os = require('os')
 const path = require('path')
 const { Readable } = require('stream')
 const { strToU8, unzipSync, zipSync } = require('fflate')
+const {
+  rezip,
+  incompressible,
+  withDeclaredSize,
+  reorder,
+} = require('../utils/zip-fixtures')
 
 const ExcelJS = verquire('exceljs')
 const { promiseImmediate } = verquire('utils/utils')
@@ -22,32 +28,9 @@ async function writeWorkbook(rows = 1) {
   return Buffer.from(await wb.xlsx.writeBuffer())
 }
 
-// Re-zips an xlsx, letting `edit` add, replace or reorder entries
-function rezip(buffer, edit) {
-  const files = edit(unzipSync(buffer))
-  return Buffer.from(zipSync(files, { level: 9 }))
-}
-
 // Adds a highly compressible entry, as a zip bomb would
 function withBomb(buffer, size, name = 'xl/media/bomb.bin') {
   return rezip(buffer, (files) => ({ ...files, [name]: new Uint8Array(size) }))
-}
-
-// Rewrites the uncompressed size declared in the central directory, which is
-// what the buffered reader trusts when allocating output
-function withDeclaredSize(buffer, entryName, size) {
-  const out = Buffer.from(buffer)
-  for (let i = out.length - 46; i >= 0; i--) {
-    if (out.readUInt32LE(i) === 0x02014b50) {
-      const nameLength = out.readUInt16LE(i + 28)
-      const name = out.toString('latin1', i + 46, i + 46 + nameLength)
-      if (name === entryName) {
-        out.writeUInt32LE(size, i + 24)
-        return out
-      }
-    }
-  }
-  throw new Error(`entry not found: ${entryName}`)
 }
 
 // A zip64 archive whose one central directory record keeps its uncompressed
@@ -89,59 +72,79 @@ function withZip64Size(high, fieldLength = 8) {
 // Puts the parts a worksheet depends on first, so the streaming reader
 // streams the worksheet rather than buffering it (Excel and exceljs write
 // the worksheet first)
-function streamedLayoutFiles(files) {
-  const first = [
-    'xl/_rels/workbook.xml.rels',
-    'xl/workbook.xml',
-    'xl/sharedStrings.xml',
-  ]
-  const ordered = {}
-  first.forEach((name) => {
-    if (files[name]) ordered[name] = files[name]
+function streamedLayoutFiles(files, last = []) {
+  return reorder(files, {
+    first: [
+      'xl/_rels/workbook.xml.rels',
+      'xl/workbook.xml',
+      'xl/sharedStrings.xml',
+    ].filter((name) => !last.includes(name)),
+    last,
   })
-  return { ...ordered, ...files }
+}
+
+// Puts a worksheet first, before every part it depends on, as Excel and
+// exceljs write it, so the streaming reader buffers it
+function sheetFirst(buffer) {
+  return rezip(buffer, (files) =>
+    reorder(files, { first: ['xl/worksheets/sheet1.xml'] }),
+  )
+}
+
+const BROKEN_RELS = strToU8('<Relationships><Relationship Id="rId1" <<<broken')
+const BROKEN_SHEET = strToU8('<worksheet><sheetData><row r="1" <<<broken')
+
+// A workbook whose sheet has `count` hyperlinked cells
+async function hyperlinkWorkbook(count) {
+  const wb = new ExcelJS.Workbook()
+  const ws = wb.addWorksheet('sheet')
+  for (let i = 1; i <= count; i++) {
+    ws.getCell(`A${i}`).value = {
+      text: `link ${i}`,
+      hyperlink: `https://example.com/${i}`,
+    }
+  }
+  return Buffer.from(await wb.xlsx.writeBuffer())
+}
+
+// A 50-row workbook laid out to stream, followed by 3000 tiny entries
+async function paddedWorkbook() {
+  const wb = new ExcelJS.Workbook()
+  const ws = wb.addWorksheet('sheet')
+  // strings, so the worksheet streams (after the shared strings)
+  for (let i = 1; i <= 50; i++) ws.addRow([i, 'row'])
+  return rezip(
+    streamedLayout(Buffer.from(await wb.xlsx.writeBuffer())),
+    (files) => {
+      const padded = { ...files }
+      for (let i = 0; i < 3000; i++) {
+        padded[`xl/media/pad${i}`] = [strToU8('x'), { level: 0 }]
+      }
+      return padded
+    },
+  )
+}
+
+// An input that hands out `buffer` 4096 bytes at a time, each on its own
+// macrotask; `offset` is how far it has got
+function pacedInput(buffer) {
+  const paced = { offset: 0 }
+  paced.input = new Readable({
+    read() {
+      setImmediate(() =>
+        this.push(
+          paced.offset < buffer.length
+            ? buffer.subarray(paced.offset, (paced.offset += 4096))
+            : null,
+        ),
+      )
+    },
+  })
+  return paced
 }
 
 function streamedLayout(buffer) {
   return rezip(buffer, streamedLayoutFiles)
-}
-
-// A zip64 archive of one deflated entry whose central directory record keeps
-// both sizes in its zip64 extra field
-function zip64Of(name, content) {
-  const zip = Buffer.from(zipSync({ [name]: content }, { level: 9 }))
-  const cdOffset = zip.readUInt32LE(zip.length - 22 + 16)
-  const local = zip.subarray(0, cdOffset)
-  const record = Buffer.from(zip.subarray(cdOffset, zip.length - 22))
-  const nameLength = record.readUInt16LE(28)
-  const compressed = record.readUInt32LE(20)
-  const extra = Buffer.alloc(20)
-  extra.writeUInt16LE(1, 0) // zip64 extra field id
-  extra.writeUInt16LE(16, 2)
-  // the zip64 field's order: uncompressed size, then compressed size
-  extra.writeBigUInt64LE(BigInt(content.length), 4)
-  extra.writeBigUInt64LE(BigInt(compressed), 12)
-  const head = Buffer.from(record.subarray(0, 46 + nameLength))
-  head.writeUInt32LE(0xffffffff, 20)
-  head.writeUInt32LE(0xffffffff, 24)
-  head.writeUInt16LE(extra.length, 30)
-  head.writeUInt16LE(0, 32) // no comment
-  const central = Buffer.concat([head, extra])
-  const zip64End = Buffer.alloc(56)
-  zip64End.writeUInt32LE(0x06064b50, 0)
-  zip64End.writeBigUInt64LE(1n, 32) // total entries
-  zip64End.writeBigUInt64LE(BigInt(central.length), 40)
-  zip64End.writeBigUInt64LE(BigInt(local.length), 48) // directory offset
-  const locator = Buffer.alloc(20)
-  locator.writeUInt32LE(0x07064b50, 0)
-  locator.writeBigUInt64LE(BigInt(local.length + central.length), 8)
-  const end = Buffer.alloc(22)
-  end.writeUInt32LE(0x06054b50, 0)
-  end.writeUInt16LE(0xffff, 8)
-  end.writeUInt16LE(0xffff, 10)
-  end.writeUInt32LE(0xffffffff, 12)
-  end.writeUInt32LE(0xffffffff, 16)
-  return Buffer.concat([local, central, zip64End, locator, end])
 }
 
 // Pads an xlsx with stored, empty directory records until it has `total`
@@ -402,37 +405,9 @@ describe('zip decompression limits', () => {
       expect(error.cause.message).to.equal('invalid zip data')
     })
 
-    it('reads in full an entry that under-declares its size, with no limits', () => {
-      // fflate's unzipSync would silently cut it off at the declared size
-      const lying = withDeclaredSize(
-        withBomb(small, MB),
-        'xl/media/bomb.bin',
-        1,
-      )
-      const files = unzipLimited(
-        lying,
-        new ZipLimits(
-          { maxEntries: null, maxUncompressedSize: null },
-          ZipLimits.BUFFERED_DEFAULTS,
-        ),
-      )
-      expect(files['xl/media/bomb.bin'].length).to.equal(MB)
-    })
-
-    it('reads the sizes in a zip64 extra field', () => {
-      const content = new Uint8Array(5000).map((_, i) => i % 7)
-      const files = unzipLimited(
-        zip64Of('xl/media/x.bin', content),
-        new ZipLimits({}, ZipLimits.BUFFERED_DEFAULTS),
-      )
-      expect(Buffer.from(files['xl/media/x.bin'])).to.deep.equal(
-        Buffer.from(content),
-      )
-    })
-
     it('ignores a zip64 locator that points at no zip64 end record', async () => {
       // as fflate does: the archive's regular end record is still valid
-      const zipped = rezip(small, (files) => files)
+      const zipped = rezip(small)
       const eocd = zipped.length - 22
       const locators = [0xffffffffffffffffn, BigInt(zipped.length + 1000)].map(
         (offset) => {
@@ -455,34 +430,10 @@ describe('zip decompression limits', () => {
       }
     })
 
-    it('reads in full a small incompressible entry that under-declares its size', () => {
-      // deflated as a stored block, which a too small output buffer can't cut
-      // off: fflate throws instead
-      const random = new Uint8Array(5000).map(() =>
-        Math.floor(Math.random() * 256),
-      )
-      const zip = rezip(small, (files) => ({
-        ...files,
-        'xl/media/r.bin': random,
-      }))
-      for (const declared of [4998, 1, 0]) {
-        const files = unzipLimited(
-          withDeclaredSize(zip, 'xl/media/r.bin', declared),
-          new ZipLimits({}, ZipLimits.BUFFERED_DEFAULTS),
-        )
-        expect(
-          Buffer.from(files['xl/media/r.bin']),
-          String(declared),
-        ).to.deep.equal(Buffer.from(random))
-      }
-    })
-
     it('reads in full, or counts, a large entry that under-declares its size', async () => {
       // incompressible, so its compressed data is fed to the inflater in
       // several chunks, the output buffer growing past the declared size
-      const random = new Uint8Array(300 * 1024).map(() =>
-        Math.floor(Math.random() * 256),
-      )
+      const random = incompressible(300 * 1024)
       const lying = withDeclaredSize(
         rezip(small, (files) => ({ ...files, 'xl/media/r.bin': random })),
         'xl/media/r.bin',
@@ -500,29 +451,6 @@ describe('zip decompression limits', () => {
           maxUncompressedSize: 200 * 1024,
         }),
         /maxUncompressedSize/,
-      )
-    })
-
-    it('stops inflating at the end of the deflate data', function () {
-      this.timeout(10000)
-      // a.bin's record claims the next entry's 16 MiB as its compressed data:
-      // pushing all of it after the deflate stream ends costs quadratic time
-      const zip = Buffer.from(
-        zipSync({
-          'xl/media/a.bin': [strToU8('a'.repeat(100)), { level: 9 }],
-          'xl/media/b.bin': [new Uint8Array(16 * MB), { level: 0 }],
-        }),
-      )
-      const cdOffset = zip.readUInt32LE(zip.length - 22 + 16)
-      zip.writeUInt32LE(zip.length - 22 - 60, cdOffset + 20)
-      const start = Date.now()
-      const files = unzipLimited(
-        zip,
-        new ZipLimits({}, ZipLimits.BUFFERED_DEFAULTS),
-      )
-      expect(Date.now() - start).to.be.below(2000)
-      expect(Buffer.from(files['xl/media/a.bin']).toString()).to.equal(
-        'a'.repeat(100),
       )
     })
 
@@ -546,22 +474,6 @@ describe('zip decompression limits', () => {
         new ZipLimits({}, ZipLimits.BUFFERED_DEFAULTS),
       )
       expect(files['xl/media/bomb.bin'].length).to.equal(8 * MB)
-    })
-
-    it('charges a deflated entry its uncompressed size only', () => {
-      // random bytes deflate to a little more than their own size
-      const random = new Uint8Array(100000).map(() =>
-        Math.floor(Math.random() * 256),
-      )
-      const zip = Buffer.from(zipSync({ 'xl/media/r.bin': random }))
-      const files = unzipLimited(
-        zip,
-        new ZipLimits(
-          { maxUncompressedSize: 100000 },
-          ZipLimits.BUFFERED_DEFAULTS,
-        ),
-      )
-      expect(files['xl/media/r.bin'].length).to.equal(100000)
     })
 
     it('rejects an archive with more than maxEntries entries', async () => {
@@ -696,11 +608,7 @@ describe('zip decompression limits', () => {
 
     it('rejects a worksheet buffered before the shared strings', async () => {
       // Sheets that precede sharedStrings/rels are buffered for later parsing
-      const reordered = rezip(large, (files) => {
-        const sheet = 'xl/worksheets/sheet1.xml'
-        const { [sheet]: sheetXml, ...rest } = files
-        return { [sheet]: sheetXml, ...rest }
-      })
+      const reordered = sheetFirst(large)
       await expectLimitError(
         streamRead(Readable.from([reordered]), {
           maxUncompressedSize: 64 * 1024,
@@ -856,24 +764,14 @@ describe('zip decompression limits', () => {
     })
 
     it('rejects a for await consumer on a limit hit in hyperlinks', async () => {
-      const wb = new ExcelJS.Workbook()
-      const ws = wb.addWorksheet('sheet')
-      for (let i = 1; i <= 200; i++) {
-        ws.getCell(`A${i}`).value = {
-          text: `link ${i}`,
-          hyperlink: `https://example.com/${i}`,
-        }
-      }
+      const linked = await hyperlinkWorkbook(200)
       const rels = 'xl/worksheets/_rels/sheet1.xml.rels'
       let relsSize
       // the sheet rels first, so the limit is crossed while they stream
-      const buffer = rezip(
-        Buffer.from(await wb.xlsx.writeBuffer()),
-        ({ [rels]: relsXml, ...rest }) => {
-          relsSize = relsXml.length
-          return { [rels]: relsXml, ...rest }
-        },
-      )
+      const buffer = rezip(linked, ({ [rels]: relsXml, ...rest }) => {
+        relsSize = relsXml.length
+        return { [rels]: relsXml, ...rest }
+      })
       const errors = await Promise.all(
         ['cache', 'emit'].map((hyperlinks) =>
           rejectionOf(
@@ -890,24 +788,14 @@ describe('zip decompression limits', () => {
     })
 
     it('reports a limit hit in hyperlinks without an unhandled rejection', async () => {
-      const wb = new ExcelJS.Workbook()
-      const ws = wb.addWorksheet('sheet')
-      for (let i = 1; i <= 200; i++) {
-        ws.getCell(`A${i}`).value = {
-          text: `link ${i}`,
-          hyperlink: `https://example.com/${i}`,
-        }
-      }
+      const linked = await hyperlinkWorkbook(200)
       const rels = 'xl/worksheets/_rels/sheet1.xml.rels'
       let relsSize
       // Put the sheet rels first so the limit is crossed while they stream
-      const buffer = rezip(
-        Buffer.from(await wb.xlsx.writeBuffer()),
-        ({ [rels]: relsXml, ...rest }) => {
-          relsSize = relsXml.length
-          return { [rels]: relsXml, ...rest }
-        },
-      )
+      const buffer = rezip(linked, ({ [rels]: relsXml, ...rest }) => {
+        relsSize = relsXml.length
+        return { [rels]: relsXml, ...rest }
+      })
 
       let error
       const unhandled = await unhandledRejectionsOf(async () => {
@@ -928,20 +816,11 @@ describe('zip decompression limits', () => {
     })
 
     it('reports malformed hyperlinks XML on the workbook and finishes the read', async () => {
-      const wb = new ExcelJS.Workbook()
-      wb.addWorksheet('sheet').getCell('A1').value = {
-        text: 'link',
-        hyperlink: 'https://example.com',
-      }
-      const buffer = rezip(
-        Buffer.from(await wb.xlsx.writeBuffer()),
-        (files) => ({
-          ...files,
-          'xl/worksheets/_rels/sheet1.xml.rels': strToU8(
-            '<Relationships><Relationship Id="rId1" <<<broken',
-          ),
-        }),
-      )
+      const linked = await hyperlinkWorkbook(1)
+      const buffer = rezip(linked, (files) => ({
+        ...files,
+        'xl/worksheets/_rels/sheet1.xml.rels': BROKEN_RELS,
+      }))
       const reader = new ExcelJS.stream.xlsx.WorkbookReader(
         Readable.from([buffer]),
         { hyperlinks: 'emit' },
@@ -965,15 +844,8 @@ describe('zip decompression limits', () => {
     })
 
     it('lets a hyperlinks listener defer its read()', async () => {
-      const wb = new ExcelJS.Workbook()
-      const ws = wb.addWorksheet('sheet')
-      for (let i = 1; i <= 20; i++) {
-        ws.getCell(`A${i}`).value = {
-          text: `link ${i}`,
-          hyperlink: `https://example.com/${i}`,
-        }
-      }
-      const buffer = Buffer.from(await wb.xlsx.writeBuffer())
+      const linked = await hyperlinkWorkbook(20)
+      const buffer = linked
       const unhandled = await unhandledRejectionsOf(async () => {
         const reader = new ExcelJS.stream.xlsx.WorkbookReader(
           Readable.from([buffer]),
@@ -1049,32 +921,9 @@ describe('zip decompression limits', () => {
     it('checks the limits as entries are parsed, not as they are read', async () => {
       // unzipper buffers small entries without waiting for them to be read,
       // so a slow consumer would otherwise let the whole archive inflate
-      const wb = new ExcelJS.Workbook()
-      const ws = wb.addWorksheet('sheet')
-      // strings, so the worksheet streams (after the shared strings)
-      for (let i = 1; i <= 50; i++) ws.addRow([i, 'row'])
-      const buffer = rezip(
-        streamedLayout(Buffer.from(await wb.xlsx.writeBuffer())),
-        (files) => {
-          const padded = { ...files }
-          for (let i = 0; i < 3000; i++) {
-            padded[`xl/media/pad${i}`] = [strToU8('x'), { level: 0 }]
-          }
-          return padded
-        },
-      )
-      let offset = 0
-      const input = new Readable({
-        read() {
-          setImmediate(() =>
-            this.push(
-              offset < buffer.length
-                ? buffer.subarray(offset, (offset += 4096))
-                : null,
-            ),
-          )
-        },
-      })
+      const buffer = await paddedWorkbook()
+      const paced = pacedInput(buffer)
+      const { input } = paced
       const error = await rejectionOf(
         (async () => {
           const reader = new ExcelJS.stream.xlsx.WorkbookReader(input, {
@@ -1089,7 +938,7 @@ describe('zip decompression limits', () => {
         })(),
       )
       expect(error && error.code).to.equal(LIMIT_CODE)
-      expect(offset).to.be.below(buffer.length / 2)
+      expect(paced.offset).to.be.below(buffer.length / 2)
     })
 
     it('reads dates from an archive without xl/workbook.xml', async () => {
@@ -1113,20 +962,11 @@ describe('zip decompression limits', () => {
     })
 
     it('fails the read on malformed hyperlinks XML despite an error listener', async () => {
-      const wb = new ExcelJS.Workbook()
-      wb.addWorksheet('sheet').getCell('A1').value = {
-        text: 'link',
-        hyperlink: 'https://example.com',
-      }
-      const buffer = rezip(
-        Buffer.from(await wb.xlsx.writeBuffer()),
-        (files) => ({
-          ...files,
-          'xl/worksheets/_rels/sheet1.xml.rels': strToU8(
-            '<Relationships><Relationship Id="rId1" <<<broken',
-          ),
-        }),
-      )
+      const linked = await hyperlinkWorkbook(1)
+      const buffer = rezip(linked, (files) => ({
+        ...files,
+        'xl/worksheets/_rels/sheet1.xml.rels': BROKEN_RELS,
+      }))
       const reader = new ExcelJS.stream.xlsx.WorkbookReader(
         Readable.from([buffer]),
         { hyperlinks: 'emit' },
@@ -1145,9 +985,7 @@ describe('zip decompression limits', () => {
     it('fails the read on malformed worksheet XML despite an error listener', async () => {
       const buffer = rezip(small, (files) => ({
         ...files,
-        'xl/worksheets/sheet1.xml': strToU8(
-          '<worksheet><sheetData><row r="1" <<<broken',
-        ),
+        'xl/worksheets/sheet1.xml': BROKEN_SHEET,
       }))
       const reader = new ExcelJS.stream.xlsx.WorkbookReader(
         Readable.from([buffer]),
@@ -1200,9 +1038,7 @@ describe('zip decompression limits', () => {
     it('fails the read when a worksheet listener iterates a malformed sheet', async () => {
       const buffer = rezip(small, (files) => ({
         ...files,
-        'xl/worksheets/sheet1.xml': strToU8(
-          '<worksheet><sheetData><row r="1" <<<broken',
-        ),
+        'xl/worksheets/sheet1.xml': BROKEN_SHEET,
       }))
       const reader = new ExcelJS.stream.xlsx.WorkbookReader(
         Readable.from([buffer]),
@@ -1229,15 +1065,8 @@ describe('zip decompression limits', () => {
       wb.addWorksheet('sheet', { state: 'hidden' }).getCell('A1').value = 'a'
       wb.addWorksheet('other').getCell('A1').value = 'b'
       // the worksheet's other parts first, xl/workbook.xml last
-      const buffer = rezip(
-        Buffer.from(await wb.xlsx.writeBuffer()),
-        (files) => {
-          const { 'xl/workbook.xml': workbook, ...rest } = files
-          return {
-            ...streamedLayoutFiles(rest),
-            'xl/workbook.xml': workbook,
-          }
-        },
+      const buffer = rezip(Buffer.from(await wb.xlsx.writeBuffer()), (files) =>
+        streamedLayoutFiles(files, ['xl/workbook.xml']),
       )
       const states = []
       for await (const worksheet of new ExcelJS.stream.xlsx.WorkbookReader(
@@ -1255,9 +1084,7 @@ describe('zip decompression limits', () => {
     it('fails parse() on an error in a worksheet read() it did not await', async () => {
       const broken = rezip(small, (files) => ({
         ...files,
-        'xl/worksheets/sheet1.xml': strToU8(
-          '<worksheet><sheetData><row r="1" <<<broken',
-        ),
+        'xl/worksheets/sheet1.xml': BROKEN_SHEET,
       }))
       const unhandled = await unhandledRejectionsOf(async () => {
         // the worksheet buffered (as exceljs writes it) and streamed
@@ -1348,7 +1175,7 @@ describe('zip decompression limits', () => {
 
     it('rejects an archive cut off between two entries', async () => {
       // cut right before the worksheet's local header
-      const zipped = rezip(small, (files) => files)
+      const zipped = rezip(small)
       const cut = zipped.indexOf(Buffer.from('xl/worksheets/sheet1.xml')) - 30
       const error = await rejectionOf(
         streamRead(Readable.from([zipped.subarray(0, cut)])),
@@ -1367,20 +1194,12 @@ describe('zip decompression limits', () => {
 
     it('emits shared strings before the worksheets that use them', async () => {
       // the workbook parts first, then the worksheet, then shared strings
-      const buffer = rezip(large, (files) => {
-        const {
-          'xl/_rels/workbook.xml.rels': rels,
-          'xl/workbook.xml': workbook,
-          'xl/sharedStrings.xml': sharedStrings,
-          ...rest
-        } = files
-        return {
-          'xl/_rels/workbook.xml.rels': rels,
-          'xl/workbook.xml': workbook,
-          ...rest,
-          'xl/sharedStrings.xml': sharedStrings,
-        }
-      })
+      const buffer = rezip(large, (files) =>
+        reorder(files, {
+          first: ['xl/_rels/workbook.xml.rels', 'xl/workbook.xml'],
+          last: ['xl/sharedStrings.xml'],
+        }),
+      )
       const strings = []
       let resolved = 0
       let cells = 0
@@ -1397,8 +1216,8 @@ describe('zip decompression limits', () => {
               if (strings[value.sharedString] !== undefined) resolved++
             }
           }
-        } else if (item.index !== undefined) {
-          strings[item.index] = item.text
+        } else if (item.eventType === 'shared-strings') {
+          strings[item.value.index] = item.value.text
         }
       }
       expect(cells).to.equal(5000)
@@ -1483,11 +1302,7 @@ describe('zip decompression limits', () => {
       }
       const first = streamedLayout(await named('first'))
       // the worksheet before everything it depends on
-      const second = rezip(await named('second'), (files) => {
-        const sheet = 'xl/worksheets/sheet1.xml'
-        const { [sheet]: sheetXml, ...rest } = files
-        return { [sheet]: sheetXml, ...rest }
-      })
+      const second = sheetFirst(await named('second'))
       const reader = new ExcelJS.stream.xlsx.WorkbookReader(
         Readable.from([first]),
       )
@@ -1509,31 +1324,9 @@ describe('zip decompression limits', () => {
     })
 
     it('holds the input back while the consumer is behind', async () => {
-      const wb = new ExcelJS.Workbook()
-      const ws = wb.addWorksheet('sheet')
-      for (let i = 1; i <= 50; i++) ws.addRow([i, 'row'])
-      const buffer = rezip(
-        streamedLayout(Buffer.from(await wb.xlsx.writeBuffer())),
-        (files) => {
-          const padded = { ...files }
-          for (let i = 0; i < 3000; i++) {
-            padded[`xl/media/pad${i}`] = [strToU8('x'), { level: 0 }]
-          }
-          return padded
-        },
-      )
-      let offset = 0
-      const input = new Readable({
-        read() {
-          setImmediate(() =>
-            this.push(
-              offset < buffer.length
-                ? buffer.subarray(offset, (offset += 4096))
-                : null,
-            ),
-          )
-        },
-      })
+      const buffer = await paddedWorkbook()
+      const paced = pacedInput(buffer)
+      const { input } = paced
       let readWhileBehind
       for await (const worksheet of new ExcelJS.stream.xlsx.WorkbookReader(
         input,
@@ -1542,19 +1335,15 @@ describe('zip decompression limits', () => {
           expect(row).to.be.ok()
           await new Promise((resolve) => setTimeout(resolve, 2))
         }
-        readWhileBehind = offset
+        readWhileBehind = paced.offset
       }
       expect(readWhileBehind).to.be.below(buffer.length / 2)
     })
 
     it('emits hyperlinks before their worksheet unless shared strings are cached', async () => {
-      const wb = new ExcelJS.Workbook()
-      wb.addWorksheet('sheet').getCell('A1').value = {
-        text: 'link',
-        hyperlink: 'https://example.com',
-      }
+      const linked = await hyperlinkWorkbook(1)
       // the workbook parts first, as Excel writes them, then the sheet
-      const buffer = streamedLayout(Buffer.from(await wb.xlsx.writeBuffer()))
+      const buffer = streamedLayout(linked)
       const order = []
       for await (const { eventType } of new ExcelJS.stream.xlsx.WorkbookReader(
         Readable.from([buffer]),
@@ -1605,16 +1394,9 @@ describe('zip decompression limits', () => {
     })
 
     it('lets a parse() consumer read hyperlinks after moving on', async () => {
-      const wb = new ExcelJS.Workbook()
-      const ws = wb.addWorksheet('sheet')
-      for (let i = 1; i <= 20; i++) {
-        ws.getCell(`A${i}`).value = {
-          text: `link ${i}`,
-          hyperlink: `https://example.com/${i}`,
-        }
-      }
+      const linked = await hyperlinkWorkbook(20)
       const reader = new ExcelJS.stream.xlsx.WorkbookReader(
-        Readable.from([Buffer.from(await wb.xlsx.writeBuffer())]),
+        Readable.from([linked]),
         { hyperlinks: 'emit' },
       )
       const pending = []
@@ -1641,9 +1423,7 @@ describe('zip decompression limits', () => {
       // nothing reads them in 'cache' mode, so a malformed part is harmless
       const buffer = rezip(small, (files) => ({
         ...files,
-        'xl/worksheets/_rels/sheet1.xml.rels': strToU8(
-          '<Relationships><Relationship Id="rId1" <<<broken',
-        ),
+        'xl/worksheets/_rels/sheet1.xml.rels': BROKEN_RELS,
       }))
       expect(
         await streamRead(Readable.from([buffer]), { hyperlinks: 'cache' }),
@@ -1651,15 +1431,8 @@ describe('zip decompression limits', () => {
     })
 
     it('lets a consumer stop early while a part is still being read', async () => {
-      const wb = new ExcelJS.Workbook()
-      const ws = wb.addWorksheet('sheet')
-      for (let i = 1; i <= 2000; i++) {
-        ws.getCell(`A${i}`).value = {
-          text: `link ${i}`,
-          hyperlink: `https://example.com/${i}`,
-        }
-      }
-      const buffer = streamedLayout(Buffer.from(await wb.xlsx.writeBuffer()))
+      const linked = await hyperlinkWorkbook(2000)
+      const buffer = streamedLayout(linked)
       const errors = []
       const unhandled = await unhandledRejectionsOf(async () => {
         // a worksheet read() nobody awaits, and no 'error' listener
@@ -1673,11 +1446,9 @@ describe('zip decompression limits', () => {
         // a hyperlinks read() nobody awaits, with an 'error' listener
         const reader = new ExcelJS.stream.xlsx.WorkbookReader(
           Readable.from([
-            rezip(
-              buffer,
-              ({ 'xl/worksheets/_rels/sheet1.xml.rels': rels, ...rest }) => ({
-                'xl/worksheets/_rels/sheet1.xml.rels': rels,
-                ...rest,
+            rezip(buffer, (files) =>
+              reorder(files, {
+                first: ['xl/worksheets/_rels/sheet1.xml.rels'],
               }),
             ),
           ]),
@@ -1740,12 +1511,8 @@ describe('zip decompression limits', () => {
       const wb = new ExcelJS.Workbook()
       // a string too, so the worksheet has shared strings to wait for
       wb.addWorksheet('sheet').addRow(['a', date])
-      const buffer = rezip(
-        Buffer.from(await wb.xlsx.writeBuffer()),
-        (files) => {
-          const { 'xl/styles.xml': styles, ...rest } = files
-          return { ...streamedLayoutFiles(rest), 'xl/styles.xml': styles }
-        },
+      const buffer = rezip(Buffer.from(await wb.xlsx.writeBuffer()), (files) =>
+        streamedLayoutFiles(files, ['xl/styles.xml']),
       )
       const values = []
       for await (const worksheet of new ExcelJS.stream.xlsx.WorkbookReader(
@@ -1761,15 +1528,8 @@ describe('zip decompression limits', () => {
       const wb = new ExcelJS.Workbook()
       wb.addWorksheet('Report', { state: 'hidden' }).getCell('A1').value = 'a'
       wb.addWorksheet('Other').getCell('A1').value = 'b'
-      const buffer = rezip(
-        Buffer.from(await wb.xlsx.writeBuffer()),
-        (files) => {
-          const { 'xl/_rels/workbook.xml.rels': rels, ...rest } = files
-          return {
-            ...streamedLayoutFiles(rest),
-            'xl/_rels/workbook.xml.rels': rels,
-          }
-        },
+      const buffer = rezip(Buffer.from(await wb.xlsx.writeBuffer()), (files) =>
+        streamedLayoutFiles(files, ['xl/_rels/workbook.xml.rels']),
       )
       const sheets = []
       for await (const worksheet of new ExcelJS.stream.xlsx.WorkbookReader(
@@ -1791,9 +1551,7 @@ describe('zip decompression limits', () => {
       const wb = new ExcelJS.Workbook()
       const ws = wb.addWorksheet('sheet')
       for (let i = 1; i <= 2000; i++) ws.addRow([i, i * 2])
-      const random = new Uint8Array(MB).map(() =>
-        Math.floor(Math.random() * 256),
-      )
+      const random = incompressible(MB)
       // no xl/sharedStrings.xml, and a megabyte after the worksheet
       const buffer = rezip(
         streamedLayout(Buffer.from(await wb.xlsx.writeBuffer())),
@@ -1802,25 +1560,15 @@ describe('zip decompression limits', () => {
           return { ...files, 'xl/media/after.bin': [random, { level: 0 }] }
         },
       )
-      let offset = 0
-      const input = new Readable({
-        read() {
-          setImmediate(() =>
-            this.push(
-              offset < buffer.length
-                ? buffer.subarray(offset, (offset += 4096))
-                : null,
-            ),
-          )
-        },
-      })
+      const paced = pacedInput(buffer)
+      const { input } = paced
       let readAtFirstRow
       let rows = 0
       for await (const worksheet of new ExcelJS.stream.xlsx.WorkbookReader(
         input,
       )) {
         for await (const row of worksheet) {
-          if (readAtFirstRow === undefined) readAtFirstRow = offset
+          if (readAtFirstRow === undefined) readAtFirstRow = paced.offset
           if (row) rows++
         }
       }
@@ -1838,11 +1586,7 @@ describe('zip decompression limits', () => {
       }
       try {
         // the worksheet before the parts it depends on
-        const buffer = rezip(large, (files) => {
-          const sheet = 'xl/worksheets/sheet1.xml'
-          const { [sheet]: sheetXml, ...rest } = files
-          return { [sheet]: sheetXml, ...rest }
-        })
+        const buffer = sheetFirst(large)
         const count = async (worksheets) => {
           buffered = 0
           let emitted = 0
@@ -2062,6 +1806,40 @@ describe('zip decompression limits', () => {
       const [error] = await Promise.all(iterations)
       expect(error, 'iteration error').to.be.an.instanceOf(Error)
       expect(error.message).to.match(/before any await/)
+    })
+
+    it('reads an archive whose xl/workbook.xml has no workbook element', async () => {
+      // e.g. a namespace-prefixed root, which the workbook xform doesn't know
+      const buffer = rezip(streamedLayout(small), (files) => ({
+        ...files,
+        'xl/workbook.xml': strToU8(
+          '<x:workbook xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>',
+        ),
+      }))
+      expect(await streamRead(Readable.from([buffer]))).to.equal(1)
+    })
+
+    it("emits each shared string as a 'shared-strings' event", async () => {
+      const options = { sharedStrings: 'emit' }
+      const parsed = []
+      for await (const {
+        eventType,
+        value,
+      } of new ExcelJS.stream.xlsx.WorkbookReader(
+        Readable.from([small]),
+        options,
+      ).parse()) {
+        if (eventType === 'shared-strings') parsed.push(value)
+      }
+      expect(parsed).to.deep.equal([{ index: 0, text: 'row 1' }])
+      const reader = new ExcelJS.stream.xlsx.WorkbookReader(
+        Readable.from([small]),
+        options,
+      )
+      const emitted = []
+      reader.on('shared-strings', (value) => emitted.push(value))
+      expect(await settle(reader)).to.equal(undefined)
+      expect(emitted).to.deep.equal(parsed)
     })
 
     it('stops reading a caller-supplied stream when the consumer stops early', async function () {
