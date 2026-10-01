@@ -417,17 +417,33 @@ describe('zip decompression limits', () => {
           return locator
         },
       )
-      for (const locator of locators) {
-        const stray = Buffer.concat([
-          zipped.subarray(0, eocd),
-          locator,
-          zipped.subarray(eocd),
-        ])
-        const wb = new ExcelJS.Workbook()
-        // eslint-disable-next-line no-await-in-loop
-        await wb.xlsx.load(stray)
-        expect(wb.getWorksheet('sheet').getCell('A1').value).to.equal('row 1')
-      }
+      await Promise.all(
+        locators.map(async (locator) => {
+          const stray = Buffer.concat([
+            zipped.subarray(0, eocd),
+            locator,
+            zipped.subarray(eocd),
+          ])
+          const wb = new ExcelJS.Workbook()
+          await wb.xlsx.load(stray)
+          expect(wb.getWorksheet('sheet').getCell('A1').value).to.equal('row 1')
+        }),
+      )
+    })
+
+    it('reads an archive with an empty styles.xml or core.xml', async () => {
+      // as earlier versions did: an empty part isn't cut-off XML
+      await Promise.all(
+        ['xl/styles.xml', 'docProps/core.xml'].map(async (part) => {
+          const wb = new ExcelJS.Workbook()
+          await wb.xlsx.load(
+            rezip(small, (files) => ({ ...files, [part]: new Uint8Array(0) })),
+          )
+          expect(wb.getWorksheet('sheet').getCell('A1').value, part).to.equal(
+            'row 1',
+          )
+        }),
+      )
     })
 
     it('reads in full, or counts, a large entry that under-declares its size', async () => {

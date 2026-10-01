@@ -2823,7 +2823,7 @@ Please note that `worksheetReader` returns an array of rows rather than each row
 The reader streams the archive once, so read each worksheet before moving on to the next one.
 Depending on the order of the parts in the file, a worksheet you skip, or are still iterating in the background when the loop moves on, is either discarded (reading or iterating it then throws "Stream was already consumed") or held in memory until the end of the read; don't rely on either.
 A worksheet can be read only once: iterating it a second time throws "Worksheet was already read" (earlier versions yielded no rows).
-A worksheet whose XML is cut off fails the read (earlier versions read it as a shorter sheet).
+A worksheet whose XML is cut off fails the read (earlier versions read it as a shorter sheet). The same goes for any part `xlsx.load` / `read` / `readFile` parse; an empty part is still read as empty.
 
 Options given to `read()` / `parse()` that set only zip limits (e.g. `{ maxUncompressedSize }`) apply those limits to that call and keep the reader's other options.
 Any other options replace the reader's options entirely, as before: pass every option you need, as those left out are unset rather than defaulted.
