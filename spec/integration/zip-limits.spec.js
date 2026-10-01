@@ -432,16 +432,25 @@ describe('zip decompression limits', () => {
     })
 
     it('reads an archive with an empty styles.xml or core.xml', async () => {
-      // as earlier versions did: an empty part isn't cut-off XML
+      // as earlier versions did: a part without any element isn't cut-off XML
+      const contents = { empty: '', newline: '\n', bom: '\ufeff' }
+      const cases = ['xl/styles.xml', 'docProps/core.xml'].flatMap((part) =>
+        Object.entries(contents).map(([name, content]) => ({
+          part,
+          name,
+          content,
+        })),
+      )
       await Promise.all(
-        ['xl/styles.xml', 'docProps/core.xml'].map(async (part) => {
+        cases.map(async ({ part, name, content }) => {
           const wb = new ExcelJS.Workbook()
           await wb.xlsx.load(
-            rezip(small, (files) => ({ ...files, [part]: new Uint8Array(0) })),
+            rezip(small, (files) => ({ ...files, [part]: strToU8(content) })),
           )
-          expect(wb.getWorksheet('sheet').getCell('A1').value, part).to.equal(
-            'row 1',
-          )
+          expect(
+            wb.getWorksheet('sheet').getCell('A1').value,
+            `${part} ${name}`,
+          ).to.equal('row 1')
         }),
       )
     })
