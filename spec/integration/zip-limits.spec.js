@@ -642,25 +642,42 @@ describe('zip decompression limits', () => {
       )
     })
 
-    it('rejects a bomb in a part that is not parsed', async () => {
-      // styles are ignored by default but still inflated while draining
-      const bomb = withBomb(small, 8 * MB, 'xl/styles.xml')
-      await expectLimitError(
-        streamRead(Readable.from([bomb]), { maxUncompressedSize: 4 * MB }),
-        /maxUncompressedSize/,
-      )
+    it('skips a bomb in a part it does not read, without inflating it', async () => {
+      // Styles are ignored by default: drained, not inflated, so not counted.
+      // (Inflated, its 64 MiB would cross the 4 MiB limit.)
+      const bomb = withBomb(small, 64 * MB, 'xl/styles.xml')
+      expect(
+        await streamRead(Readable.from([bomb]), {
+          maxUncompressedSize: 4 * MB,
+        }),
+      ).to.equal(1)
     })
 
-    it('counts media too, although it is drained without buffering', async () => {
-      await expectLimitError(
-        streamRead(Readable.from([withBomb(small, 8 * MB)]), {
-          maxUncompressedSize: MB,
-        }),
-        /maxUncompressedSize/,
+    it('reports the parts it skips as entries', async () => {
+      const reader = new ExcelJS.stream.xlsx.WorkbookReader(
+        Readable.from([small]),
+        {
+          entries: 'emit',
+          worksheets: 'ignore',
+          sharedStrings: 'ignore',
+          styles: 'ignore',
+        },
       )
-      // and within the limit, media doesn't stop the read
-      const rows = await streamRead(Readable.from([withBomb(small, 8 * MB)]), {
-        maxUncompressedSize: 16 * MB,
+      const types = []
+      reader.on('entry', ({ type }) => types.push(type))
+      expect(await settle(reader)).to.equal(undefined)
+      expect(types.sort()).to.deep.equal([
+        'shared-strings',
+        'styles',
+        'workbook',
+        'worksheet',
+      ])
+    })
+
+    it('skips media without inflating it', async () => {
+      // inflated, its 64 MiB would cross the 1 MiB limit
+      const rows = await streamRead(Readable.from([withBomb(small, 64 * MB)]), {
+        maxUncompressedSize: MB,
       })
       expect(rows).to.equal(1)
     })
@@ -797,19 +814,13 @@ describe('zip decompression limits', () => {
         relsSize = relsXml.length
         return { [rels]: relsXml, ...rest }
       })
-      const errors = await Promise.all(
-        ['cache', 'emit'].map((hyperlinks) =>
-          rejectionOf(
-            streamRead(Readable.from([buffer]), {
-              hyperlinks,
-              maxUncompressedSize: relsSize - 1,
-            }),
-          ),
-        ),
+      await expectLimitError(
+        streamRead(Readable.from([buffer]), {
+          hyperlinks: 'emit',
+          maxUncompressedSize: relsSize - 1,
+        }),
+        /maxUncompressedSize/,
       )
-      errors.forEach((error) => {
-        expect(error && error.code).to.equal(LIMIT_CODE)
-      })
     })
 
     it('reports a limit hit in hyperlinks without an unhandled rejection', async () => {
@@ -1025,63 +1036,48 @@ describe('zip decompression limits', () => {
       expect(worksheetErrors).to.deep.equal([workbookError])
     })
 
-    it('lets a worksheet listener iterate it during read()', async () => {
+    it('reads each worksheet itself in read(): a listener cannot iterate it', async () => {
       const reader = new ExcelJS.stream.xlsx.WorkbookReader(
         Readable.from([large]),
       )
-      const iterations = []
+      let rows = 0
+      const attempts = []
       reader.on('worksheet', (worksheet) => {
-        iterations.push(
-          (async () => {
-            let rows = 0
-            for await (const row of worksheet) {
-              if (row) rows++
-            }
-            return rows
-          })(),
+        worksheet.on('row', () => rows++)
+        const iterator = worksheet[Symbol.asyncIterator]()
+        attempts.push(
+          // iterating it, peeking at it (and dropping the iterator), its
+          // parse(), and iterating it after an await
+          rejectionOf(
+            (async () => {
+              // eslint-disable-next-line no-unused-vars
+              for await (const row of worksheet) {
+                // read the rows
+              }
+            })(),
+          ),
+          rejectionOf(iterator.next()),
+          rejectionOf(worksheet.parse().next()),
+          rejectionOf(
+            (async () => {
+              await null
+              // eslint-disable-next-line no-unused-vars
+              for await (const row of worksheet) {
+                // read the rows
+              }
+            })(),
+          ),
         )
       })
-      const error = await settle(reader)
-      expect(error).to.equal(undefined)
-      expect(await Promise.all(iterations)).to.deep.equal([5000])
-    })
-
-    it('waits for a worksheet listener that iterates and stops early', async () => {
-      const reader = new ExcelJS.stream.xlsx.WorkbookReader(
-        Readable.from([streamedLayout(large)]),
-      )
-      reader.on('worksheet', (worksheet) => {
-        ;(async () => {
-          // eslint-disable-next-line no-unused-vars
-          for await (const row of worksheet) break
-        })()
+      // none of them can stall the read
+      expect(await withinTime(settle(reader), 'the read')).to.equal(undefined)
+      expect(rows).to.equal(5000)
+      const errors = await Promise.all(attempts)
+      expect(errors).to.have.length(4)
+      errors.forEach((error) => {
+        expect(error).to.be.an.instanceOf(Error)
+        expect(error.message).to.match(/listen for its 'row' events/)
       })
-      const error = await settle(reader)
-      expect(error).to.equal(undefined)
-    })
-
-    it('fails the read when a worksheet listener iterates a malformed sheet', async () => {
-      const buffer = rezip(small, (files) => ({
-        ...files,
-        'xl/worksheets/sheet1.xml': BROKEN_SHEET,
-      }))
-      const reader = new ExcelJS.stream.xlsx.WorkbookReader(
-        Readable.from([buffer]),
-      )
-      const iterations = []
-      reader.on('worksheet', (worksheet) => {
-        iterations.push(
-          (async () => {
-            // eslint-disable-next-line no-unused-vars
-            for await (const row of worksheet) {
-              // read the rows
-            }
-          })().catch((error) => error),
-        )
-      })
-      const error = await settle(reader)
-      expect(error, 'workbook error').to.be.an.instanceOf(Error)
-      expect(await Promise.all(iterations)).to.deep.equal([error])
     })
 
     it('streams a worksheet only after xl/workbook.xml', async () => {
@@ -1174,23 +1170,6 @@ describe('zip decompression limits', () => {
         firstRows.push(value.number)
       }
       expect(firstRows).to.deep.equal([1, 1])
-    })
-
-    it('lets a worksheet listener parse() it during read()', async () => {
-      const reader = new ExcelJS.stream.xlsx.WorkbookReader(
-        Readable.from([large]),
-      )
-      let rows = 0
-      reader.on('worksheet', (worksheet) => {
-        ;(async () => {
-          for await (const events of worksheet.parse()) {
-            rows += events.filter((e) => e.eventType === 'row').length
-          }
-        })()
-      })
-      const error = await settle(reader)
-      expect(error).to.equal(undefined)
-      expect(rows).to.equal(5000)
     })
 
     it('reads an archive with bytes after its end record', async () => {
@@ -1837,28 +1816,6 @@ describe('zip decompression limits', () => {
           await withinTime(streamRead(Readable.from(chunks)), 'the read'),
         ).to.equal(1)
       }
-    })
-
-    it('says why a worksheet listener that awaits first cannot iterate it', async () => {
-      const reader = new ExcelJS.stream.xlsx.WorkbookReader(
-        Readable.from([large]),
-      )
-      const iterations = []
-      reader.on('worksheet', (worksheet) => {
-        iterations.push(
-          (async () => {
-            await null
-            // eslint-disable-next-line no-unused-vars
-            for await (const row of worksheet) {
-              // read the rows
-            }
-          })().catch((error) => error),
-        )
-      })
-      expect(await settle(reader)).to.equal(undefined)
-      const [error] = await Promise.all(iterations)
-      expect(error, 'iteration error').to.be.an.instanceOf(Error)
-      expect(error.message).to.match(/before any await/)
     })
 
     it('reads an archive whose xl/workbook.xml has no workbook element', async () => {

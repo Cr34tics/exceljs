@@ -1663,10 +1663,12 @@ export interface ZipReadLimits {
    */
   maxEntries?: number | null
   /**
-   * Maximum total uncompressed size, in bytes, of all the archive's entries,
-   * parsed or not. Both readers count the bytes entries actually inflate to;
-   * `xlsx.load`/`read`/`readFile` also check the sizes the entries declare
-   * before inflating any. `null` or `Infinity` disables the limit.
+   * Maximum total uncompressed size, in bytes, of the archive's entries.
+   * Both readers count the bytes entries actually inflate to;
+   * `xlsx.load`/`read`/`readFile` inflate every entry, and also check the
+   * sizes the entries declare before inflating any. The streaming
+   * `WorkbookReader` skips the parts it doesn't read without inflating them.
+   * `null` or `Infinity` disables the limit.
    *
    * `xlsx.read`/`readFile` first buffer the whole (compressed) input, which
    * neither limit bounds: cap the input's size yourself.
@@ -2368,9 +2370,9 @@ export namespace stream {
     /**
      * A streamed worksheet. Read it once, before the workbook reader moves
      * on: either read() it, which emits 'row' events then 'finished' (and
-     * 'error' to its listeners), or iterate it. A listener that starts
-     * iterating it must finish, or break out of, the iteration (or call the
-     * iterator's return()): the workbook reader's read() waits for it.
+     * 'error' to its listeners), or iterate it. A worksheet handed out by
+     * the workbook reader's read() is read by it: listen for its 'row'
+     * events; iterating it throws.
      */
     class WorksheetReader extends EventEmitter {
       constructor(options: WorksheetReaderOptions)
