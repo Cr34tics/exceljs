@@ -1646,7 +1646,7 @@ export type JSZipGeneratorOptions = ZipGeneratorOptions
 /**
  * Limits that guard against zip decompression bombs when reading an XLSX file.
  * Omit a limit to use the default; pass `null` or `Infinity` to disable it.
- * A limit must be a non-negative number, `null` or `Infinity`: anything else
+ * A limit must be a non-negative integer, `null` or `Infinity`: anything else
  * fails the read with a `TypeError` (the streaming `WorkbookReader`'s
  * constructor throws it).
  * Exceeding one fails the read with an `Error` whose `code` is
@@ -2331,16 +2331,24 @@ export namespace stream {
 
     /**
      * Reads a workbook as a stream. read() reports through events
-     * ('worksheet', 'shared-strings', 'hyperlinks', 'entry', 'error', 'end');
-     * parse() and async iteration yield instead. It is not a Workbook.
+     * ('worksheet', 'shared-strings', 'hyperlinks', 'entry', 'error', 'end',
+     * 'finished'); parse() and async iteration yield instead. It is not a
+     * Workbook.
      */
     class WorkbookReader extends EventEmitter {
       constructor(
         input?: string | import('stream').Stream | null,
         options?: Partial<WorkbookStreamReaderOptions> | null,
       )
-      /** The options a read() or parse() given none uses */
+      /**
+       * The options a read() or parse() given none uses. Zip limits set here
+       * apply too, over the constructor's.
+       */
       options: Partial<WorkbookStreamReaderOptions>
+      /** What the last read learnt of the workbook (xl/workbook.xml) */
+      model: Partial<WorkbookModel>
+      /** The workbook properties (workbookPr) of the last read */
+      properties: { [key: string]: any }
       /**
        * `input` replaces the constructor's. `options` that set only zip limits
        * apply those limits to this call. Any other `options` replace the
@@ -2349,14 +2357,14 @@ export namespace stream {
        * applies to this call only, and the constructor's apply otherwise.
        */
       read(
-        input?: string | import('stream').Stream,
-        options?: Partial<WorkbookStreamReaderOptions>,
+        input?: string | import('stream').Stream | null,
+        options?: Partial<WorkbookStreamReaderOptions> | null,
       ): Promise<void>
       [Symbol.asyncIterator](): AsyncGenerator<WorksheetReader>
       /** Takes `input` and `options` as read() does. */
       parse(
-        input?: string | import('stream').Stream,
-        options?: Partial<WorkbookStreamReaderOptions>,
+        input?: string | import('stream').Stream | null,
+        options?: Partial<WorkbookStreamReaderOptions> | null,
       ): AsyncGenerator<any>
     }
 
@@ -2372,19 +2380,19 @@ export namespace stream {
      * on: either read() it, which emits 'row' events then 'finished' (and
      * 'error' to its listeners), or iterate it. A worksheet handed out by
      * the workbook reader's read() is read by it: listen for its 'row'
-     * events; iterating it throws.
+     * events; iterating it throws. (Not exported: the workbook reader hands
+     * them out.)
      */
-    class WorksheetReader extends EventEmitter {
-      constructor(options: WorksheetReaderOptions)
+    interface WorksheetReader extends EventEmitter {
       id: number | string
       name: string
       state?: string
       read(): Promise<void>
       [Symbol.asyncIterator](): AsyncGenerator<Row>
       parse(): AsyncGenerator<Array<any>>
-      dimensions(): number
-      columns(): number
-      getColumn(c: number): Column
+      readonly dimensions: Range
+      readonly columns: Column[] | null
+      getColumn(c: number | string): Column
     }
 
     interface StreamedHyperlink {
@@ -2398,9 +2406,10 @@ export namespace stream {
      * A worksheet's hyperlinks, handed out with `hyperlinks: 'emit'`. read()
      * emits a 'hyperlink' event for each, then 'finished'. The workbook
      * reader reads them before moving on, so listen for 'hyperlink' in its
-     * 'hyperlinks' handler; a later read() shares that read.
+     * 'hyperlinks' handler; a later read() shares that read. (Not exported:
+     * the workbook reader hands them out.)
      */
-    class HyperlinkReader extends EventEmitter {
+    interface HyperlinkReader extends EventEmitter {
       id: number | string
       read(): Promise<void>
       on(

@@ -35,8 +35,8 @@ function withDeclaredSize(buffer, entryName, size) {
 }
 
 // A zip64 archive of one deflated entry whose central directory record keeps
-// both sizes in its zip64 extra field
-function zip64Of(name, content) {
+// both sizes in its zip64 extra field, the uncompressed one being `declared`
+function zip64Of(name, content, declared = content.length) {
   const zip = zipOf({ [name]: content })
   const cdOffset = zip.readUInt32LE(zip.length - 22 + 16)
   const local = zip.subarray(0, cdOffset)
@@ -47,7 +47,7 @@ function zip64Of(name, content) {
   extra.writeUInt16LE(1, 0) // zip64 extra field id
   extra.writeUInt16LE(16, 2)
   // the zip64 field's order: uncompressed size, then compressed size
-  extra.writeBigUInt64LE(BigInt(content.length), 4)
+  extra.writeBigUInt64LE(BigInt(declared), 4)
   extra.writeBigUInt64LE(BigInt(compressed), 12)
   const head = Buffer.from(record.subarray(0, 46 + nameLength))
   head.writeUInt32LE(0xffffffff, 20)
@@ -57,12 +57,17 @@ function zip64Of(name, content) {
   const central = Buffer.concat([head, extra])
   const zip64End = Buffer.alloc(56)
   zip64End.writeUInt32LE(0x06064b50, 0)
+  zip64End.writeBigUInt64LE(44n, 4) // size of the rest of the record
+  zip64End.writeUInt16LE(45, 12) // version made by
+  zip64End.writeUInt16LE(45, 14) // version needed
+  zip64End.writeBigUInt64LE(1n, 24) // entries on this disk
   zip64End.writeBigUInt64LE(1n, 32) // total entries
   zip64End.writeBigUInt64LE(BigInt(central.length), 40)
   zip64End.writeBigUInt64LE(BigInt(local.length), 48) // directory offset
   const locator = Buffer.alloc(20)
   locator.writeUInt32LE(0x07064b50, 0)
   locator.writeBigUInt64LE(BigInt(local.length + central.length), 8)
+  locator.writeUInt32LE(1, 16) // total disks
   const end = Buffer.alloc(22)
   end.writeUInt32LE(0x06054b50, 0)
   end.writeUInt16LE(0xffff, 8)
@@ -70,6 +75,44 @@ function zip64Of(name, content) {
   end.writeUInt32LE(0xffffffff, 12)
   end.writeUInt32LE(0xffffffff, 16)
   return Buffer.concat([local, central, zip64End, locator, end])
+}
+
+// A zip of one entry whose deflate data is `deflated` as given, declaring
+// `size` uncompressed bytes
+function zipOfDeflated(name, deflated, size) {
+  const nameBytes = Buffer.from(name)
+  const header = (signature, length) => {
+    const b = Buffer.alloc(length)
+    b.writeUInt32LE(signature, 0)
+    return b
+  }
+  const local = header(0x04034b50, 30)
+  local.writeUInt16LE(20, 4) // version needed
+  local.writeUInt16LE(8, 8) // deflate
+  local.writeUInt32LE(deflated.length, 18)
+  local.writeUInt32LE(size, 22)
+  local.writeUInt16LE(nameBytes.length, 26)
+  const central = header(0x02014b50, 46)
+  central.writeUInt16LE(20, 4)
+  central.writeUInt16LE(20, 6)
+  central.writeUInt16LE(8, 10)
+  central.writeUInt32LE(deflated.length, 20)
+  central.writeUInt32LE(size, 24)
+  central.writeUInt16LE(nameBytes.length, 28)
+  const cdOffset = 30 + nameBytes.length + deflated.length
+  const end = header(0x06054b50, 22)
+  end.writeUInt16LE(1, 8)
+  end.writeUInt16LE(1, 10)
+  end.writeUInt32LE(46 + nameBytes.length, 12)
+  end.writeUInt32LE(cdOffset, 16)
+  return Buffer.concat([
+    local,
+    nameBytes,
+    Buffer.from(deflated),
+    central,
+    nameBytes,
+    end,
+  ])
 }
 
 // The entries of `files` reordered: `first` at the front, `last` at the end,
@@ -90,5 +133,6 @@ module.exports = {
   incompressible,
   withDeclaredSize,
   zip64Of,
+  zipOfDeflated,
   reorder,
 }

@@ -1,9 +1,11 @@
 const { Inflate, deflateSync, strToU8, zipSync } = require('fflate')
+const fflate = require('fflate')
 const {
   zipOf,
   incompressible,
   withDeclaredSize,
   zip64Of,
+  zipOfDeflated,
 } = require('../../utils/zip-fixtures')
 
 const unzipLimited = verquire('utils/unzip-limited')
@@ -94,10 +96,10 @@ describe('unzipLimited', () => {
           .with.property('code', ZipLimits.ERROR_CODE)
       })
 
-      it('stops inflating at the end of the deflate data', function () {
-        this.timeout(10000)
-        // a.bin's record claims the next entry's 16 MiB as its compressed data:
-        // pushing all of it after the deflate stream ends costs quadratic time
+      it('stops inflating at the end of the deflate data', () => {
+        // a.bin's record claims the next entry's 16 MiB as its compressed
+        // data: pushing all of it after the deflate stream ends costs
+        // quadratic time
         const zip = Buffer.from(
           zipSync({
             'a.bin': [strToU8('a'.repeat(100)), { level: 9 }],
@@ -106,10 +108,60 @@ describe('unzipLimited', () => {
         )
         const cdOffset = zip.readUInt32LE(zip.length - 22 + 16)
         zip.writeUInt32LE(zip.length - 22 - 60, cdOffset + 20)
-        const start = Date.now()
-        const files = unzip(zip, limits())
-        expect(Date.now() - start).to.be.below(2000)
-        expect(Buffer.from(files['a.bin']).toString()).to.equal('a'.repeat(100))
+        const { push } = fflate.Inflate.prototype
+        let pushes = 0
+        fflate.Inflate.prototype.push = function (...args) {
+          pushes++
+          return push.apply(this, args)
+        }
+        try {
+          const files = unzip(zip, limits())
+          expect(Buffer.from(files['a.bin']).toString()).to.equal(
+            'a'.repeat(100),
+          )
+        } finally {
+          fflate.Inflate.prototype.push = push
+        }
+        // pushing all of it would take 256 pushes
+        expect(pushes).to.be.below(4)
+      })
+
+      it('counts what all entries inflate to together', () => {
+        // each under-declares, and fits the limit on its own
+        const zip = ['a', 'b', 'c'].reduce(
+          (lying, entry) => withDeclaredSize(lying, `${entry}.bin`, 1),
+          zipOf({
+            'a.bin': new Uint8Array(3 * MB),
+            'b.bin': new Uint8Array(3 * MB),
+            'c.bin': new Uint8Array(3 * MB),
+          }),
+        )
+        expect(() => unzip(zip, limits({ maxUncompressedSize: 4 * MB })))
+          .to.throw(Error, /maxUncompressedSize/)
+          .with.property('code', ZipLimits.ERROR_CODE)
+      })
+
+      it('reads an entry without any deflate data as empty', () => {
+        const files = unzip(
+          zipOfDeflated('e.bin', new Uint8Array(0), 0),
+          limits(),
+        )
+        expect(files['e.bin'].length).to.equal(0)
+      })
+
+      it('reads a zip64 entry that declares more than 4 GiB', () => {
+        const content = strToU8('abc'.repeat(1000))
+        const files = unzip(
+          zip64Of('x.bin', content, 2 ** 32 + 1000),
+          limits({ maxUncompressedSize: null }),
+        )
+        expect(Buffer.from(files['x.bin'])).to.deep.equal(Buffer.from(content))
+      })
+
+      it('returns a small entry in a buffer of about its own size', () => {
+        const files = unzip(zipOf({ 's.bin': strToU8('small') }), limits())
+        expect(Buffer.from(files['s.bin']).toString()).to.equal('small')
+        expect(files['s.bin'].buffer.byteLength).to.be.below(64)
       })
 
       it('charges a deflated entry its uncompressed size only', () => {
@@ -160,6 +212,86 @@ describe('unzipLimited', () => {
       expect(files['a.bin'].length).to.equal(1000)
       expect(files['a.bin'].buffer.byteLength).to.be.below(MB)
     }
+  })
+
+  it('fails, rather than cuts short, a deflate stream with a long run of empty blocks', () => {
+    // 'AAAA', 45,000 empty stored blocks (225 KB of input that inflate to
+    // nothing), then 'BBBB'
+    const block = (final, data) =>
+      Buffer.concat([
+        Buffer.from([final ? 1 : 0]),
+        Buffer.from([data.length, 0, 255 - data.length, 255]),
+        Buffer.from(data),
+      ])
+    const deflated = Buffer.concat([
+      block(false, 'AAAA'),
+      ...Array(45000).fill(block(false, '')),
+      block(true, 'BBBB'),
+    ])
+    const zip = zipOfDeflated('p.bin', deflated, 8)
+    expect(
+      Buffer.from(
+        unzipLimited(zip, limits(), unzipLimited.inflateWithZlib)['p.bin'],
+      ).toString(),
+    ).to.equal('AAAABBBB')
+    // fflate's pushes see no output for 128 KiB: it can't tell the data
+    // hasn't ended, and fails the entry
+    expect(() =>
+      unzipLimited(zip, limits(), unzipLimited.inflateWithFflate),
+    ).to.throw(Error, 'invalid zip data')
+  })
+
+  it('charges a stored entry what it copies, whatever it declares', () => {
+    const zip = withDeclaredSize(
+      zipOf({ 's.bin': [incompressible(100000), { level: 0 }] }),
+      's.bin',
+      5,
+    )
+    expect(() => unzipLimited(zip, limits({ maxUncompressedSize: 1000 })))
+      .to.throw(Error, /maxUncompressedSize/)
+      .with.property('code', ZipLimits.ERROR_CODE)
+  })
+
+  it('rejects a central directory record with a bad signature', () => {
+    const zip = zipOf({ 'a.bin': strToU8('a') })
+    const cdOffset = zip.readUInt32LE(zip.length - 22 + 16)
+    zip.writeUInt32LE(0x12345678, cdOffset)
+    expect(() => unzipLimited(zip, limits()))
+      .to.throw(Error, 'invalid zip data')
+      .with.property('code', 'ERR_INVALID_ZIP')
+  })
+
+  it('rejects entry data that runs past the end of the archive', () => {
+    const zip = zipOf({ 'a.bin': strToU8('a'.repeat(100)) })
+    const cdOffset = zip.readUInt32LE(zip.length - 22 + 16)
+    // its compressed size, in the central directory record
+    zip.writeUInt32LE(zip.length, cdOffset + 20)
+    expect(() => unzipLimited(zip, limits())).to.throw(
+      Error,
+      'invalid zip data',
+    )
+  })
+
+  it('rejects an unknown compression method', () => {
+    const zip = zipOf({ 'a.bin': strToU8('a'.repeat(100)) })
+    const cdOffset = zip.readUInt32LE(zip.length - 22 + 16)
+    zip.writeUInt16LE(99, cdOffset + 10)
+    expect(() => unzipLimited(zip, limits())).to.throw(
+      Error,
+      'unknown compression type 99',
+    )
+  })
+
+  it('reads UTF-8 names, and skips each record’s comment', () => {
+    const files = unzipLimited(
+      zipOf({
+        'ä.bin': [strToU8('a'), { comment: 'a comment' }],
+        'b.bin': [strToU8('b'), { comment: 'another' }],
+      }),
+      limits(),
+    )
+    expect(Object.keys(files)).to.deep.equal(['ä.bin', 'b.bin'])
+    expect(Buffer.from(files['b.bin']).toString()).to.equal('b')
   })
 
   describe('isDone', () => {
