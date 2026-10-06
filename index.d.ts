@@ -1655,6 +1655,11 @@ export type JSZipGeneratorOptions = ZipGeneratorOptions
  * reader's `read()` emits it as an `'error'` event (rejecting only when
  * nothing listens for `'error'`).
  */
+/**
+ * Read only from the options object's own properties: limits inherited from
+ * a prototype (e.g. `Object.create({ maxEntries: 1 })`, or getters on a
+ * class) are ignored.
+ */
 export interface ZipReadLimits {
   /**
    * Maximum number of entries (files and directories) in the zip archive;
@@ -2393,7 +2398,8 @@ export namespace stream {
       on(event: 'row', listener: (row: Row) => void): this
       on(
         event: 'hyperlink',
-        listener: (hyperlink: { ref: string; rId: string }) => void,
+        /** `rId` is undefined for a link within the workbook */
+        listener: (hyperlink: { ref: string; rId?: string }) => void,
       ): this
       on(event: string | symbol, listener: (...args: any[]) => void): this
     }

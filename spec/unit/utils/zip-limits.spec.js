@@ -53,7 +53,11 @@ describe('ZipLimits', () => {
 
   it('ignores limits inherited from the prototype', () => {
     for (const name of ['maxEntries', 'maxUncompressedSize']) {
-      Object.prototype[name] = null
+      Object.defineProperty(Object.prototype, name, {
+        value: null,
+        configurable: true,
+        writable: true,
+      })
       try {
         const limits = new ZipLimits({}, ZipLimits.BUFFERED_DEFAULTS)
         expect(limits[name]).to.equal(ZipLimits.BUFFERED_DEFAULTS[name])

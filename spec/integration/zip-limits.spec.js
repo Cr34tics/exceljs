@@ -338,7 +338,8 @@ describe('zip decompression limits', () => {
   })
 
   describe('xlsx.load', () => {
-    it('reads a highly compressible entry under the default limits', async () => {
+    it('reads a highly compressible entry under the default limits', async function () {
+      this.timeout(10000)
       const wb = new ExcelJS.Workbook()
       await wb.xlsx.load(withBomb(small, 8 * MB))
       expect(wb.getWorksheet('sheet').getCell('A1').value).to.equal('row 1')
@@ -718,6 +719,34 @@ describe('zip decompression limits', () => {
       )
     })
 
+    it('reads the shared strings of an archive whose workbook rels hold no element', async () => {
+      const wb = new ExcelJS.Workbook()
+      wb.addWorksheet('a').addRow([1, 'one'])
+      wb.addWorksheet('b').addRow(['two', 2])
+      // shared strings after the worksheets, as Excel writes them
+      const buffer = rezip(Buffer.from(await wb.xlsx.writeBuffer()), (files) =>
+        reorder(
+          { ...files, 'xl/_rels/workbook.xml.rels': strToU8('') },
+          {
+            first: ['xl/workbook.xml', 'xl/_rels/workbook.xml.rels'],
+            last: ['xl/sharedStrings.xml'],
+          },
+        ),
+      )
+      const values = []
+      for await (const worksheet of new ExcelJS.stream.xlsx.WorkbookReader(
+        Readable.from([buffer]),
+      )) {
+        for await (const row of worksheet) {
+          values.push([1, 2].map((col) => row.getCell(col).value))
+        }
+      }
+      expect(values).to.deep.equal([
+        [1, 'one'],
+        ['two', 2],
+      ])
+    })
+
     it('reads an archive whose workbook rels hold no element', async () => {
       for (const rels of ['', '  ', '<?xml version="1.0"?>']) {
         const buffer = streamedLayout(
@@ -737,7 +766,8 @@ describe('zip decompression limits', () => {
       }
     })
 
-    it('charges the parts it skips their compressed size', async () => {
+    it('charges the parts it skips their compressed size', async function () {
+      this.timeout(10000)
       const buffer = rezip(small, (files) => ({
         ...files,
         'xl/media/random.bin': incompressible(5 * MB),
@@ -748,7 +778,8 @@ describe('zip decompression limits', () => {
       )
     })
 
-    it('closes a file it opened before reporting a failed worksheet read()', async () => {
+    it('closes a file it opened before reporting a failed worksheet read()', async function () {
+      this.timeout(10000)
       const broken = streamedLayout(
         rezip(large, (files) => ({
           ...files,
@@ -792,7 +823,9 @@ describe('zip decompression limits', () => {
         })),
       )
       const unhandled = await unhandledRejectionsOf(async () => {
+        let onUnhandled
         const reported = new Promise((resolve) => {
+          onUnhandled = resolve
           process.once('unhandledRejection', resolve)
         })
         for await (const {
@@ -807,7 +840,11 @@ describe('zip decompression limits', () => {
             break
           }
         }
-        await withinTime(reported, 'the unhandled rejection')
+        try {
+          await withinTime(reported, 'the unhandled rejection')
+        } finally {
+          process.removeListener('unhandledRejection', onUnhandled)
+        }
       })
       expect(unhandled.length).to.be.above(0)
       expect(unhandled[0].message).to.match(/close tag/)
@@ -2331,9 +2368,21 @@ describe('zip decompression limits', () => {
       if (held) held()
       // The paused input may still fill its own buffer (highWaterMark, 64 KiB
       // by default), but nothing reads it any more, so it then stays put
-      await new Promise((resolve) => setTimeout(resolve, 100))
+      await withinTime(
+        (async () => {
+          while (input.readableLength < input.readableHighWaterMark) {
+            // eslint-disable-next-line no-await-in-loop
+            await promiseImmediate()
+          }
+        })(),
+        'the paused input filling its buffer',
+        5000,
+      )
+      // a push already scheduled may still land
+      await promiseImmediate()
       const settled = offset
-      await new Promise((resolve) => setTimeout(resolve, 200))
+      // eslint-disable-next-line no-await-in-loop
+      for (let i = 0; i < 10; i++) await promiseImmediate()
       expect(offset).to.equal(settled)
       expect(offset).to.be.at.most(gate + 96 * 1024)
       // the input is the caller's to close

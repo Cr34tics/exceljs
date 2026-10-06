@@ -26,8 +26,14 @@ describe('parseSax', () => {
   }
 
   it('rejects a long run of comments or instructions without backtracking', async () => {
-    // took exponential time in the comments and instructions before the tail
+    // took exponential time in the comments and instructions before the tail:
+    // a short run first, which took about a second (a long one never ends,
+    // synchronously, so no timeout could fail it)
     const started = Date.now()
+    expect(await parseError(`${'<!---->'.repeat(24)}<!--`)).to.be.an.instanceOf(
+      Error,
+    )
+    expect(Date.now() - started).to.be.below(200)
     for (const xml of [
       `${'<!---->'.repeat(200)}<!--`,
       `${'<?a?>'.repeat(200)}<`,
