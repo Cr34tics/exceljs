@@ -2347,8 +2347,11 @@ export namespace stream {
       options: Partial<WorkbookStreamReaderOptions>
       /** What the last read learnt of the workbook (xl/workbook.xml) */
       model: Partial<WorkbookModel>
-      /** The workbook properties (workbookPr) of the last read */
-      properties: { [key: string]: any }
+      /**
+       * The workbook properties (workbookPr) of the last read, under `model`
+       * (also at `model.properties` of the reader)
+       */
+      properties: { model?: Partial<WorkbookProperties> }
       /**
        * `input` replaces the constructor's. `options` that set only zip limits
        * apply those limits to this call. Any other `options` replace the
@@ -2368,17 +2371,11 @@ export namespace stream {
       ): AsyncGenerator<any>
     }
 
-    interface WorksheetReaderOptions {
-      workbook: WorkbookReader
-      id: number | string
-      iterator: AsyncIterable<Buffer | Uint8Array | string>
-      options: Partial<WorkbookStreamReaderOptions>
-    }
-
     /**
      * A streamed worksheet. Read it once, before the workbook reader moves
-     * on: either read() it, which emits 'row' events then 'finished' (and
-     * 'error' to its listeners), or iterate it. A worksheet handed out by
+     * on: either read() it, which emits 'row' events (and, with
+     * `hyperlinks: 'emit'`, a 'hyperlink' event for each hyperlinked cell)
+     * then 'finished' (and 'error' to its listeners), or iterate it. A worksheet handed out by
      * the workbook reader's read() is read by it: listen for its 'row'
      * events; iterating it throws. (Not exported: the workbook reader hands
      * them out.)
@@ -2393,6 +2390,12 @@ export namespace stream {
       readonly dimensions: Range
       readonly columns: Column[] | null
       getColumn(c: number | string): Column
+      on(event: 'row', listener: (row: Row) => void): this
+      on(
+        event: 'hyperlink',
+        listener: (hyperlink: { ref: string; rId: string }) => void,
+      ): this
+      on(event: string | symbol, listener: (...args: any[]) => void): this
     }
 
     interface StreamedHyperlink {

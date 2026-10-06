@@ -2488,12 +2488,13 @@ Reading therefore enforces two limits by default:
 An entry whose declared size is merely wrong is read in full (earlier versions cut it short to that size). One that declares less than it inflates to can briefly cost about twice what is left of the limit before the read fails.
 `xlsx.load` reads entries stored uncompressed straight from the buffer you pass it, so don't modify that buffer until `load()` settles (`read` and `readFile` read their own copy).
 `xlsx.read` / `readFile` first buffer the whole (compressed) input, which neither limit bounds: check the size of a stream or file you don't trust before reading it.
-The streaming reader counts the bytes it actually inflates, as they are inflated. It doesn't inflate the parts it doesn't read (media, themes, drawings, and parts its options leave out, such as `xl/styles.xml` with `styles: 'ignore'`): it skips their compressed data, so they can't be a bomb, and only their compressed size counts towards `maxUncompressedSize`.
+The streaming reader counts the bytes it actually inflates, as they are inflated. Bytes outside its entries (anything between the central directory and its end record, or a CRX header before the archive) are not entries, so neither limit sees them: the zip parser buffers them, so cap the size of an input you don't trust. It doesn't inflate the parts it doesn't read (media, themes, drawings, and parts its options leave out, such as `xl/styles.xml` with `styles: 'ignore'`): it skips their compressed data, so they can't be a bomb, and only their compressed size counts towards `maxUncompressedSize`.
 It holds a worksheet in memory until the parts it depends on have been read: with `sharedStrings: 'cache'` (the default), `xl/workbook.xml`, its rels, the shared strings (unless the rels list none, as for a workbook of only numbers) and, with `styles: 'cache'`, the styles. In files written by Excel and exceljs, some of these come after the worksheets. (Whether a workbook has shared strings or styles is read from its rels: a `xl/sharedStrings.xml` the rels don't list is ignored when it comes to waiting.) With `sharedStrings: 'emit'` or `'ignore'`, it holds every worksheet until the end of the archive, as before. With `worksheets: 'ignore'` it holds none. Once a few entries are queued it stops reading its input until it catches up, through backpressure, which also holds back any other stream the input feeds. It can't take back what it has already received, so how far it gets ahead depends on the size of the input's chunks: a whole archive passed as one chunk is parsed ahead in full.
 
-The defaults are a ceiling, not a memory budget: what they let through can still cost a lot of memory.
-`xlsx.load` / `read` / `readFile` need several times the uncompressed size in memory (about 3x for media, 13-20x for worksheet XML), and the streaming reader may hold up to `maxUncompressedSize` of worksheets it buffers.
-On a service that reads untrusted uploads, set `maxUncompressedSize` to what you can afford, e.g. `100 * 1024 * 1024`.
+The limits bound the bytes inflated, not memory use: what they let through can still cost a lot of memory.
+For a typical workbook, `xlsx.load` / `read` / `readFile` need several times the uncompressed size in memory (about 3x for media, 13-20x for worksheet XML), and the streaming reader may hold up to `maxUncompressedSize` of worksheets it buffers.
+Crafted XML can cost far more, whatever its size: `xlsx.load` / `read` / `readFile` expand ranges cell by cell (a column definition, merged cell, defined name or data validation spanning a whole sheet), so a workbook of a few kilobytes can exhaust the heap.
+On a service that reads untrusted uploads, set `maxUncompressedSize` low (e.g. `100 * 1024 * 1024`), cap the size of the upload itself, prefer the streaming reader, and run `xlsx.load` in a worker or process with a memory limit.
 (An XML part over 512 MiB can't be read in any case: it fails with V8's `ERR_STRING_TOO_LONG`.)
 
 When a limit is exceeded, the read fails with an `Error` whose `code` is `'ERR_ZIP_LIMIT_EXCEEDED'`.
@@ -2835,7 +2836,7 @@ With `hyperlinks: 'emit'`, the workbook reader reads each hyperlinks reader itse
 
 ###### Iterating over all events(#contents)<!-- Link generated with jump2header -->
 
-Events on workbook are 'worksheet', 'shared-strings' and 'hyperlinks'. Events on worksheet are 'row'; on the hyperlinks reader, 'hyperlink'.
+Events on workbook are 'worksheet', 'shared-strings' and 'hyperlinks'. Events on worksheet are 'row' and, with `hyperlinks: 'emit'`, 'hyperlink' (`{ ref, rId }`, the cell and its relationship); the hyperlinks reader emits 'hyperlink' (`{ type, rId, target, targetMode }`).
 
 ```js
 const options = {

@@ -176,24 +176,79 @@ describe('unzipLimited', () => {
     })
   })
 
-  it('inflates each entry once with zlib, however wrong its declared size', () => {
+  it('inflates with zlib bounded by the declared size, then by the limit', () => {
     const zlib = require('zlib')
     const { inflateRawSync } = zlib
-    let calls = 0
-    zlib.inflateRawSync = (...args) => {
-      calls++
-      return inflateRawSync(...args)
+    const bounds = []
+    zlib.inflateRawSync = (data, options) => {
+      bounds.push(options.maxOutputLength)
+      return inflateRawSync(data, options)
     }
     try {
+      // a small entry that declares too little stops at its declared size,
+      // and is inflated again, counted, bounded by what the limit leaves
       const random = incompressible(5000)
       const files = unzipLimited(
         withDeclaredSize(zipOf({ 'r.bin': random }), 'r.bin', 1),
-        limits(),
+        limits({ maxUncompressedSize: 10 * MB }),
         unzipLimited.inflateWithZlib,
       )
       expect(Buffer.from(files['r.bin'])).to.deep.equal(Buffer.from(random))
-      expect(calls).to.equal(1)
+      expect(bounds).to.deep.equal([2, 10 * MB + 1])
+
+      // a bomb that declares a small size never inflates past the limit
+      bounds.length = 0
+      expect(() =>
+        unzipLimited(
+          withDeclaredSize(
+            zipOf({ 'b.bin': new Uint8Array(8 * MB) }),
+            'b.bin',
+            100 * 1024,
+          ),
+          limits({ maxUncompressedSize: MB }),
+          unzipLimited.inflateWithZlib,
+        ),
+      )
+        .to.throw(Error, /maxUncompressedSize/)
+        .with.property('code', ZipLimits.ERROR_CODE)
+      expect(bounds).to.deep.equal([MB + 1])
     } finally {
+      zlib.inflateRawSync = inflateRawSync
+    }
+  })
+
+  it('inflates with fflate, and enforces the limits, in a browser bundle', () => {
+    // load a copy as the browser bundle sees it
+    const file = Object.keys(require.cache).find(
+      (name) => require.cache[name].exports === unzipLimited,
+    )
+    const cached = require.cache[file]
+    const zlib = require('zlib')
+    const { inflateRawSync } = zlib
+    let zlibCalls = 0
+    zlib.inflateRawSync = (...args) => {
+      zlibCalls++
+      return inflateRawSync(...args)
+    }
+    process.browser = true
+    try {
+      delete require.cache[file]
+      // eslint-disable-next-line import-x/no-dynamic-require
+      const browserUnzip = require(file)
+      const bomb = withDeclaredSize(
+        zipOf({ 'b.bin': new Uint8Array(8 * MB) }),
+        'b.bin',
+        1,
+      )
+      expect(() => browserUnzip(bomb, limits({ maxUncompressedSize: MB })))
+        .to.throw(Error, /maxUncompressedSize/)
+        .with.property('code', ZipLimits.ERROR_CODE)
+      const files = browserUnzip(zipOf({ 's.txt': strToU8('small') }), limits())
+      expect(Buffer.from(files['s.txt']).toString()).to.equal('small')
+      expect(zlibCalls).to.equal(0)
+    } finally {
+      delete process.browser
+      require.cache[file] = cached
       zlib.inflateRawSync = inflateRawSync
     }
   })

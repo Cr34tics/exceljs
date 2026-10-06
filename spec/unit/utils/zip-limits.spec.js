@@ -40,11 +40,26 @@ describe('ZipLimits', () => {
   })
 
   it('rejects invalid values', () => {
-    for (const value of [-1, NaN, '10', {}]) {
-      expect(
-        () => new ZipLimits({ maxEntries: value }, ZipLimits.BUFFERED_DEFAULTS),
-        String(value),
-      ).to.throw(TypeError)
+    const invalid = [-1, NaN, '10', {}, 1.5, 0.5, 2 ** 53, -Infinity]
+    for (const name of ['maxEntries', 'maxUncompressedSize']) {
+      for (const value of invalid) {
+        expect(
+          () => new ZipLimits({ [name]: value }, ZipLimits.BUFFERED_DEFAULTS),
+          `${name}: ${value}`,
+        ).to.throw(TypeError)
+      }
+    }
+  })
+
+  it('ignores limits inherited from the prototype', () => {
+    for (const name of ['maxEntries', 'maxUncompressedSize']) {
+      Object.prototype[name] = null
+      try {
+        const limits = new ZipLimits({}, ZipLimits.BUFFERED_DEFAULTS)
+        expect(limits[name]).to.equal(ZipLimits.BUFFERED_DEFAULTS[name])
+      } finally {
+        delete Object.prototype[name]
+      }
     }
   })
 
