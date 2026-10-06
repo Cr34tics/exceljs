@@ -1,3 +1,5 @@
+import { EventEmitter } from 'events'
+
 declare interface Buffer extends ArrayBuffer {}
 
 export declare enum RelationshipType {
@@ -375,13 +377,7 @@ export declare enum ErrorValue {
 
 export interface CellErrorValue {
   error:
-    | '#N/A'
-    | '#REF!'
-    | '#NAME?'
-    | '#DIV/0!'
-    | '#NULL!'
-    | '#VALUE!'
-    | '#NUM!'
+    '#N/A' | '#REF!' | '#NAME?' | '#DIV/0!' | '#NULL!' | '#VALUE!' | '#NUM!'
 }
 
 export interface RichText {
@@ -1230,10 +1226,7 @@ export type ConditionalFormattingRule =
   | DataBarRuleType
 
 export type RowValues =
-  | CellValue[]
-  | { [key: string]: CellValue }
-  | undefined
-  | null
+  CellValue[] | { [key: string]: CellValue } | undefined | null
 
 export interface ConditionalFormattingOptions {
   ref: string
@@ -1498,9 +1491,7 @@ export interface Worksheet {
     range: Range | string | Location,
     formula: string,
     results?:
-      | ((r: number, c: number) => string | number)
-      | number[]
-      | number[][],
+      ((r: number, c: number) => string | number) | number[] | number[][],
   ): void
 
   /**
@@ -1652,7 +1643,45 @@ export interface ZipGeneratorOptions {
  */
 export type JSZipGeneratorOptions = ZipGeneratorOptions
 
-export interface XlsxReadOptions {
+/**
+ * Limits that guard against zip decompression bombs when reading an XLSX file.
+ * Omit a limit to use the default; pass `null` or `Infinity` to disable it.
+ * A limit must be a non-negative integer, `null` or `Infinity`: anything else
+ * fails the read with a `TypeError` (the streaming `WorkbookReader`'s
+ * constructor throws it).
+ * Exceeding one fails the read with an `Error` whose `code` is
+ * `'ERR_ZIP_LIMIT_EXCEEDED'`: `xlsx.load`/`read`/`readFile` and the streaming
+ * reader's `parse()` and async iteration reject with it; the streaming
+ * reader's `read()` emits it as an `'error'` event (rejecting only when
+ * nothing listens for `'error'`).
+ * The limits are read only from the options object's own properties: limits
+ * inherited from a prototype (e.g. `Object.create({ maxEntries: 1 })`, or
+ * getters on a class) are ignored.
+ */
+export interface ZipReadLimits {
+  /**
+   * Maximum number of entries (files and directories) in the zip archive;
+   * `null` or `Infinity` disables the limit.
+   * @default 10000
+   */
+  maxEntries?: number | null
+  /**
+   * Maximum total uncompressed size, in bytes, of the archive's entries.
+   * Both readers count the bytes entries actually inflate to;
+   * `xlsx.load`/`read`/`readFile` inflate every entry, and also check the
+   * sizes the entries declare before inflating any. The streaming
+   * `WorkbookReader` skips the parts it doesn't read without inflating them.
+   * `null` or `Infinity` disables the limit.
+   *
+   * `xlsx.read`/`readFile` first buffer the whole (compressed) input, which
+   * neither limit bounds: cap the input's size yourself.
+   * @default 1073741824 (1 GiB) for `xlsx.load`/`read`/`readFile`;
+   * 4294967296 (4 GiB) for the streaming `WorkbookReader`
+   */
+  maxUncompressedSize?: number | null
+}
+
+export interface XlsxReadOptions extends ZipReadLimits {
   /**
    * The list of XML node names to ignore while parsing an XLSX file
    */
@@ -1683,7 +1712,8 @@ export interface Xlsx {
   ): Promise<Workbook>
 
   /**
-   * load from an array buffer
+   * load from an array buffer. Don't modify `buffer` until the returned
+   * promise settles: parts stored uncompressed are read from it as they are.
    * @param buffer
    */
   load(buffer: Buffer, options?: Partial<XlsxReadOptions>): Promise<Workbook>
@@ -2279,7 +2309,7 @@ export namespace stream {
       addWorkbook(): Promise<void>
     }
 
-    interface WorkbookStreamReaderOptions {
+    interface WorkbookStreamReaderOptions extends ZipReadLimits {
       /**
        * @default 'emit'
        */
@@ -2302,31 +2332,98 @@ export namespace stream {
       entries?: 'emit' | 'ignore'
     }
 
-    class WorkbookReader extends Workbook {
+    /**
+     * Reads a workbook as a stream. read() reports through events
+     * ('worksheet', 'shared-strings', 'hyperlinks', 'entry', 'error', 'end',
+     * 'finished'); parse() and async iteration yield instead. It is not a
+     * Workbook.
+     */
+    class WorkbookReader extends EventEmitter {
       constructor(
-        input: string | import('stream').Stream,
-        options: Partial<WorkbookStreamReaderOptions>,
+        input?: string | import('stream').Stream | null,
+        options?: Partial<WorkbookStreamReaderOptions> | null,
       )
-      read(): Promise<void>
+      /**
+       * The options a read() or parse() given none uses. Zip limits set here
+       * apply too, over the constructor's.
+       */
+      options: Partial<WorkbookStreamReaderOptions>
+      /** What the last read learnt of the workbook (xl/workbook.xml) */
+      model: Partial<WorkbookModel>
+      /**
+       * The workbook properties (workbookPr) of the last read, under `model`
+       * (also at `model.properties` of the reader)
+       */
+      properties: { model?: Partial<WorkbookProperties> }
+      /**
+       * `input` replaces the constructor's. `options` that set only zip limits
+       * apply those limits to this call. Any other `options` replace the
+       * reader's options entirely: pass every option you need, as those left
+       * out are unset rather than defaulted. Either way, a limit `options` sets
+       * applies to this call only, and the constructor's apply otherwise.
+       */
+      read(
+        input?: string | import('stream').Stream | null,
+        options?: Partial<WorkbookStreamReaderOptions> | null,
+      ): Promise<void>
       [Symbol.asyncIterator](): AsyncGenerator<WorksheetReader>
-      parse(): AsyncIterator<any>
+      /** Takes `input` and `options` as read() does. */
+      parse(
+        input?: string | import('stream').Stream | null,
+        options?: Partial<WorkbookStreamReaderOptions> | null,
+      ): AsyncGenerator<any>
     }
 
-    interface WorksheetReaderOptions {
-      workbook: Workbook
-      id: number
-      entry: import('stream').Stream
-      options: WorkbookStreamReaderOptions
-    }
-
-    class WorksheetReader {
-      constructor(options: WorksheetReaderOptions)
+    /**
+     * A streamed worksheet. Read it once, before the workbook reader moves
+     * on: either read() it, which emits 'row' events (and, with
+     * `hyperlinks: 'emit'`, a 'hyperlink' event for each hyperlinked cell)
+     * then 'finished' (and 'error' to its listeners), or iterate it. A worksheet handed out by
+     * the workbook reader's read() is read by it: listen for its 'row'
+     * events; iterating it throws. (Not exported: the workbook reader hands
+     * them out.)
+     */
+    interface WorksheetReader extends EventEmitter {
+      id: number | string
+      name: string
+      state?: string
       read(): Promise<void>
       [Symbol.asyncIterator](): AsyncGenerator<Row>
-      parse(): AsyncIterator<Array<any>>
-      dimensions(): number
-      columns(): number
-      getColumn(c: number): Column
+      parse(): AsyncGenerator<Array<any>>
+      readonly dimensions: Range
+      readonly columns: Column[] | null
+      getColumn(c: number | string): Column
+      on(event: 'row', listener: (row: Row) => void): this
+      on(
+        event: 'hyperlink',
+        /** `rId` is undefined for a link within the workbook */
+        listener: (hyperlink: { ref: string; rId?: string }) => void,
+      ): this
+      on(event: string | symbol, listener: (...args: any[]) => void): this
+    }
+
+    interface StreamedHyperlink {
+      type: RelationshipType
+      rId: string
+      target: string
+      targetMode?: string
+    }
+
+    /**
+     * A worksheet's hyperlinks, handed out with `hyperlinks: 'emit'`. read()
+     * emits a 'hyperlink' event for each, then 'finished'. The workbook
+     * reader reads them before moving on, so listen for 'hyperlink' in its
+     * 'hyperlinks' handler; a later read() shares that read. (Not exported:
+     * the workbook reader hands them out.)
+     */
+    interface HyperlinkReader extends EventEmitter {
+      id: number | string
+      read(): Promise<void>
+      on(
+        event: 'hyperlink',
+        listener: (hyperlink: StreamedHyperlink) => void,
+      ): this
+      on(event: string | symbol, listener: (...args: any[]) => void): this
     }
   }
 }

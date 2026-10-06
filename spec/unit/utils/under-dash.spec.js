@@ -76,4 +76,15 @@ describe('under-dash', () => {
       }
     })
   })
+
+  it('deepMerge does not merge into Object.prototype', () => {
+    const merged = _.deepMerge(
+      {},
+      JSON.parse('{"__proto__": {"polluted": "yes"}, "a": 1}'),
+      JSON.parse('{"constructor": {"prototype": {"polluted": "yes"}}}'),
+    )
+    expect(merged.a).to.equal(1)
+    expect({}.polluted).to.equal(undefined)
+    expect(Object.prototype.polluted).to.equal(undefined)
+  })
 })
