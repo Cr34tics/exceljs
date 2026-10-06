@@ -1654,11 +1654,9 @@ export type JSZipGeneratorOptions = ZipGeneratorOptions
  * reader's `parse()` and async iteration reject with it; the streaming
  * reader's `read()` emits it as an `'error'` event (rejecting only when
  * nothing listens for `'error'`).
- */
-/**
- * Read only from the options object's own properties: limits inherited from
- * a prototype (e.g. `Object.create({ maxEntries: 1 })`, or getters on a
- * class) are ignored.
+ * The limits are read only from the options object's own properties: limits
+ * inherited from a prototype (e.g. `Object.create({ maxEntries: 1 })`, or
+ * getters on a class) are ignored.
  */
 export interface ZipReadLimits {
   /**
