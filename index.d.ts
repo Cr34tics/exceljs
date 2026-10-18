@@ -1654,6 +1654,11 @@ export type JSZipGeneratorOptions = ZipGeneratorOptions
  * reader's `parse()` and async iteration reject with it; the streaming
  * reader's `read()` emits it as an `'error'` event (rejecting only when
  * nothing listens for `'error'`).
+ * Separately, `xlsx.load`/`read`/`readFile` reject an archive that isn't a
+ * valid zip (a corrupt central directory, or deflate data that can't be
+ * inflated) with `code` `'ERR_INVALID_ZIP'`, the underlying error as `cause`;
+ * one in a compression method that can't be read, with
+ * `'ERR_UNSUPPORTED_ZIP_COMPRESSION'`.
  * The limits are read only from the options object's own properties: limits
  * inherited from a prototype (e.g. `Object.create({ maxEntries: 1 })`, or
  * getters on a class) are ignored.
@@ -2334,9 +2339,10 @@ export namespace stream {
 
     /**
      * Reads a workbook as a stream. read() reports through events
-     * ('worksheet', 'shared-strings', 'hyperlinks', 'entry', 'error', 'end',
-     * 'finished'); parse() and async iteration yield instead. It is not a
-     * Workbook.
+     * ('worksheet', 'shared-strings', 'hyperlinks', 'error', 'end',
+     * 'finished'); parse() and async iteration yield instead. With
+     * `entries: 'emit'`, 'entry' events are emitted whichever way it is read.
+     * It is not a Workbook.
      */
     class WorkbookReader extends EventEmitter {
       constructor(
@@ -2389,7 +2395,11 @@ export namespace stream {
         event: 'entry',
         listener: (entry: { type: string; id?: string }) => void,
       ): this
-      on(event: 'error', listener: (error: Error) => void): this
+      /** A zip limit or invalid-archive error carries a `code` */
+      on(
+        event: 'error',
+        listener: (error: Error & { code?: string }) => void,
+      ): this
       on(event: 'end' | 'finished', listener: () => void): this
       on(event: string | symbol, listener: (...args: any[]) => void): this
     }

@@ -144,6 +144,36 @@ function pacedInput(buffer) {
   return paced
 }
 
+// Streams a 2000-row workbook of numbers, laid out to stream and edited by
+// `edit`, with a stored megabyte after the worksheet, through a paced input.
+// Resolves with its rows and how far into the archive (of `length` bytes)
+// the reader had got at the first row.
+async function firstRowOfNumbers(edit, options) {
+  const wb = new ExcelJS.Workbook()
+  const ws = wb.addWorksheet('sheet')
+  for (let i = 1; i <= 2000; i++) ws.addRow([i, i * 2])
+  const buffer = rezip(
+    streamedLayout(Buffer.from(await wb.xlsx.writeBuffer())),
+    (files) => ({
+      ...edit(files),
+      'xl/media/after.bin': [incompressible(MB), { level: 0 }],
+    }),
+  )
+  const paced = pacedInput(buffer)
+  let readAtFirstRow
+  let rows = 0
+  for await (const worksheet of new ExcelJS.stream.xlsx.WorkbookReader(
+    paced.input,
+    options,
+  )) {
+    for await (const row of worksheet) {
+      if (readAtFirstRow === undefined) readAtFirstRow = paced.offset
+      if (row) rows++
+    }
+  }
+  return { rows, readAtFirstRow, length: buffer.length }
+}
+
 function streamedLayout(buffer) {
   return rezip(buffer, streamedLayoutFiles)
 }
@@ -361,6 +391,29 @@ describe('zip decompression limits', () => {
       expectInvalidZip(await rejectionOf(new ExcelJS.Workbook().xlsx.load(zip)))
     })
 
+    it('rejects a corrupt archive of any supported type, from any realm, with ERR_INVALID_ZIP', async () => {
+      const vm = require('vm')
+      const bytes = Buffer.from('not a zip archive, but long enough to look')
+      const foreign = vm.runInNewContext(`new Uint8Array(${bytes.length})`)
+      foreign.set(bytes)
+      const inputs = {
+        Buffer: bytes,
+        Uint8Array: new Uint8Array(bytes),
+        ArrayBuffer: new Uint8Array(bytes).buffer,
+        'Uint8Array of another realm': foreign,
+        'ArrayBuffer of another realm': foreign.buffer,
+      }
+      for (const [type, input] of Object.entries(inputs)) {
+        // eslint-disable-next-line no-await-in-loop
+        const error = await rejectionOf(new ExcelJS.Workbook().xlsx.load(input))
+        expect(error && error.code, type).to.equal('ERR_INVALID_ZIP')
+      }
+      // not a supported type at all: no code
+      const error = await rejectionOf(new ExcelJS.Workbook().xlsx.load({}))
+      expect(error.message).to.match(/supported JavaScript type/)
+      expect(error.code).to.equal(undefined)
+    })
+
     it('rejects invalid limits before reading the input', async () => {
       let pulled = 0
       const input = new Readable({
@@ -476,14 +529,19 @@ describe('zip decompression limits', () => {
       // as fflate does: the archive's regular end record is still valid
       const zipped = rezip(small)
       const eocd = zipped.length - 22
-      const locators = [0xffffffffffffffffn, BigInt(zipped.length + 1000)].map(
-        (offset) => {
-          const locator = Buffer.alloc(20)
-          locator.writeUInt32LE(0x07064b50, 0)
-          locator.writeBigUInt64LE(offset, 8)
-          return locator
-        },
-      )
+      // out of range, and in range but not at a zip64 end record
+      const locators = [
+        0xffffffffffffffffn,
+        BigInt(zipped.length + 1000),
+        0n,
+        10n,
+        40n,
+      ].map((offset) => {
+        const locator = Buffer.alloc(20)
+        locator.writeUInt32LE(0x07064b50, 0)
+        locator.writeBigUInt64LE(offset, 8)
+        return locator
+      })
       await Promise.all(
         locators.map(async (locator) => {
           const stray = Buffer.concat([
@@ -880,6 +938,158 @@ describe('zip decompression limits', () => {
         }
       }
       expect(order).to.deep.equal(['hyperlinks', 'worksheet'])
+    })
+
+    it('streams the dates of a 1904 workbook, and its sheets with their names and ids', async () => {
+      const reader = new ExcelJS.stream.xlsx.WorkbookReader(
+        './spec/integration/data/1904.xlsx',
+        { styles: 'cache' },
+      )
+      const sheets = []
+      let date
+      for await (const worksheet of reader) {
+        sheets.push([worksheet.id, worksheet.name])
+        for await (const row of worksheet) {
+          if (worksheet.name === 'Sheet1' && row.number === 4) {
+            date = row.getCell(2).value
+          }
+        }
+      }
+      // (in archive order)
+      expect(sheets.sort()).to.deep.equal([
+        [1, 'Sheet1'],
+        [2, 'Sheet2'],
+        [3, 'Sheet3'],
+      ])
+      expect(date).to.be.an.instanceOf(Date)
+      expect(date.toISOString()).to.equal('1904-01-01T00:00:00.000Z')
+      // and read() finishes
+      const events = new ExcelJS.stream.xlsx.WorkbookReader(
+        './spec/integration/data/1904.xlsx',
+      )
+      const finished = new Promise((resolve) => events.on('finished', resolve))
+      expect(await settle(events)).to.equal(undefined)
+      await withinTime(finished, "the 'finished' event")
+    })
+
+    it('reads a reused reader with nothing of the previous archive', async () => {
+      const book = async (text) => {
+        const wb = new ExcelJS.Workbook()
+        wb.addWorksheet('sheet').addRow([text, new Date(Date.UTC(2021, 0, 1))])
+        return Buffer.from(await wb.xlsx.writeBuffer())
+      }
+      const first = streamedLayout(await book('alpha'))
+      const beta = await book('beta')
+      // Reads `first`, then `second`, with one reader: the cell values of each
+      const valuesOf = async (second, options) => {
+        const reader = new ExcelJS.stream.xlsx.WorkbookReader(
+          Readable.from([first]),
+          options,
+        )
+        const read = async (input) => {
+          const values = []
+          for await (const { eventType, value } of reader.parse(input)) {
+            if (eventType === 'worksheet') {
+              for await (const row of value) {
+                values.push(row.getCell(1).value, row.getCell(2).value)
+              }
+            }
+          }
+          return values
+        }
+        expect((await read())[0]).to.equal('alpha')
+        return read(Readable.from([second]))
+      }
+      const layout = (order) =>
+        rezip(beta, (files) => reorder(files, { first: order }))
+      const head = ['xl/_rels/workbook.xml.rels', 'xl/workbook.xml']
+      // the sheet before its shared strings: the first archive's would
+      // stream it with theirs
+      const [text] = await valuesOf(
+        layout([...head, 'xl/worksheets/sheet1.xml', 'xl/sharedStrings.xml']),
+      )
+      expect(text).to.equal('beta')
+      // the sheet before its styles: the first archive's having been read
+      // would stream it with none, its date a number
+      const [, date] = await valuesOf(
+        layout([
+          ...head,
+          'xl/sharedStrings.xml',
+          'xl/worksheets/sheet1.xml',
+          'xl/styles.xml',
+        ]),
+        { styles: 'cache' },
+      )
+      expect(date).to.be.an.instanceOf(Date)
+    })
+
+    it('takes the first of duplicate relationships and sheets, as before', async () => {
+      const buffer = streamedLayout(
+        rezip(small, (files) => {
+          const rels = Buffer.from(files['xl/_rels/workbook.xml.rels'])
+            .toString()
+            .replace(
+              '</Relationships>',
+              '<Relationship Id="rId99" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>',
+            )
+          const workbook = Buffer.from(files['xl/workbook.xml'])
+            .toString()
+            .replace(
+              '</sheets>',
+              '<sheet sheetId="8" name="later rel" r:id="rId99"/><sheet sheetId="9" name="later sheet" r:id="rId4"/></sheets>',
+            )
+          return {
+            ...files,
+            'xl/_rels/workbook.xml.rels': strToU8(rels),
+            'xl/workbook.xml': strToU8(workbook),
+          }
+        }),
+      )
+      const sheets = []
+      for await (const worksheet of new ExcelJS.stream.xlsx.WorkbookReader(
+        Readable.from([buffer]),
+      )) {
+        sheets.push([worksheet.id, worksheet.name])
+        // eslint-disable-next-line no-unused-vars
+        for await (const row of worksheet) {
+          // read the rows
+        }
+      }
+      expect(sheets).to.deep.equal([[1, 'sheet']])
+    })
+
+    it('gives a constructor option given as undefined its default', () => {
+      const reader = new ExcelJS.stream.xlsx.WorkbookReader('x.xlsx', {
+        worksheets: undefined,
+        sharedStrings: undefined,
+        hyperlinks: undefined,
+        styles: undefined,
+        entries: undefined,
+      })
+      expect(reader.options).to.deep.equal({
+        worksheets: 'emit',
+        sharedStrings: 'cache',
+        hyperlinks: 'ignore',
+        styles: 'ignore',
+        entries: 'ignore',
+      })
+    })
+
+    it('takes options holding any object as they are', async () => {
+      // e.g. a logger with a back-reference: never walked into
+      const logger = { name: 'log' }
+      logger.self = logger
+      const reader = new ExcelJS.stream.xlsx.WorkbookReader(
+        Readable.from([small]),
+        { logger },
+      )
+      expect(reader.options.logger).to.equal(logger)
+      let rows = 0
+      for await (const worksheet of reader) {
+        // eslint-disable-next-line no-unused-vars
+        for await (const row of worksheet) rows++
+      }
+      expect(rows).to.equal(1)
     })
 
     it('reads normally within the limits', async () => {
@@ -1883,33 +2093,15 @@ describe('zip decompression limits', () => {
     })
 
     it('streams the worksheets of a workbook with no shared strings', async () => {
-      const wb = new ExcelJS.Workbook()
-      const ws = wb.addWorksheet('sheet')
-      for (let i = 1; i <= 2000; i++) ws.addRow([i, i * 2])
-      const random = incompressible(MB)
-      // no xl/sharedStrings.xml, and a megabyte after the worksheet
-      const buffer = rezip(
-        streamedLayout(Buffer.from(await wb.xlsx.writeBuffer())),
+      const { rows, readAtFirstRow, length } = await firstRowOfNumbers(
         (files) => {
           expect(files['xl/sharedStrings.xml']).to.equal(undefined)
-          return { ...files, 'xl/media/after.bin': [random, { level: 0 }] }
+          return files
         },
       )
-      const paced = pacedInput(buffer)
-      const { input } = paced
-      let readAtFirstRow
-      let rows = 0
-      for await (const worksheet of new ExcelJS.stream.xlsx.WorkbookReader(
-        input,
-      )) {
-        for await (const row of worksheet) {
-          if (readAtFirstRow === undefined) readAtFirstRow = paced.offset
-          if (row) rows++
-        }
-      }
       expect(rows).to.equal(2000)
       // buffered, it would come only once the whole archive was read
-      expect(readAtFirstRow).to.be.below(buffer.length - MB / 2)
+      expect(readAtFirstRow).to.be.below(length - MB / 2)
     })
 
     it('does not buffer a worksheet it does not emit', async () => {
@@ -2196,14 +2388,19 @@ describe('zip decompression limits', () => {
       expect(events).to.deep.equal([])
       // options parsed from JSON can't reach Object.prototype
       const hostile = JSON.parse('{"__proto__": {"polluted": "yes"}}')
-      const polluting = new ExcelJS.stream.xlsx.WorkbookReader(
-        Readable.from([small]),
-        hostile,
-      )
-      for await (const item of polluting.parse(undefined, hostile)) {
-        expect(item).to.be.ok()
+      try {
+        const polluting = new ExcelJS.stream.xlsx.WorkbookReader(
+          Readable.from([small]),
+          hostile,
+        )
+        for await (const item of polluting.parse(undefined, hostile)) {
+          expect(item).to.be.ok()
+        }
+        expect({}.polluted).to.equal(undefined)
+      } finally {
+        // a regression mustn't leave the prototype polluted for later specs
+        delete Object.prototype.polluted
       }
-      expect({}.polluted).to.equal(undefined)
     })
 
     it('reads with options assigned to reader.options', async () => {
@@ -2313,39 +2510,20 @@ describe('zip decompression limits', () => {
     })
 
     it('streams worksheets with styles cached when the rels list no styles', async () => {
-      const wb = new ExcelJS.Workbook()
-      const ws = wb.addWorksheet('sheet')
-      for (let i = 1; i <= 2000; i++) ws.addRow([i, i * 2])
-      const buffer = rezip(
-        streamedLayout(Buffer.from(await wb.xlsx.writeBuffer())),
+      const { rows, readAtFirstRow, length } = await firstRowOfNumbers(
         (files) => {
           const rels = Buffer.from(files['xl/_rels/workbook.xml.rels'])
             .toString()
             .replace(/<Relationship [^>]*styles[^>]*\/>/, '')
-          const rest = { ...files }
+          const rest = { ...files, 'xl/_rels/workbook.xml.rels': strToU8(rels) }
           delete rest['xl/styles.xml']
-          return {
-            ...rest,
-            'xl/_rels/workbook.xml.rels': strToU8(rels),
-            'xl/media/after.bin': [incompressible(MB), { level: 0 }],
-          }
+          return rest
         },
-      )
-      const paced = pacedInput(buffer)
-      let readAtFirstRow
-      let rows = 0
-      for await (const worksheet of new ExcelJS.stream.xlsx.WorkbookReader(
-        paced.input,
         { styles: 'cache' },
-      )) {
-        for await (const row of worksheet) {
-          if (readAtFirstRow === undefined) readAtFirstRow = paced.offset
-          if (row) rows++
-        }
-      }
+      )
       expect(rows).to.equal(2000)
       // buffered, it would come only once the whole archive was read
-      expect(readAtFirstRow).to.be.below(buffer.length - MB / 2)
+      expect(readAtFirstRow).to.be.below(length - MB / 2)
     })
 
     it('reads an archive whose xl/workbook.xml has no workbook element', async () => {

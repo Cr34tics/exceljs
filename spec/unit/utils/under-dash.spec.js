@@ -78,13 +78,20 @@ describe('under-dash', () => {
   })
 
   it('deepMerge does not merge into Object.prototype', () => {
-    const merged = _.deepMerge(
-      {},
-      JSON.parse('{"__proto__": {"polluted": "yes"}, "a": 1}'),
-      JSON.parse('{"constructor": {"prototype": {"polluted": "yes"}}}'),
-    )
-    expect(merged.a).to.equal(1)
-    expect({}.polluted).to.equal(undefined)
-    expect(Object.prototype.polluted).to.equal(undefined)
+    try {
+      const merged = _.deepMerge(
+        {},
+        JSON.parse('{"__proto__": {"polluted": "yes"}, "a": 1}'),
+        JSON.parse('{"constructor": {"prototype": {"polluted": "yes"}}}'),
+      )
+      expect(merged.a).to.equal(1)
+      expect({}.polluted).to.equal(undefined)
+      expect(Object.prototype.polluted).to.equal(undefined)
+      // a 'constructor' key is merged as an own property, like any other
+      expect(Object.hasOwn(merged, 'constructor')).to.equal(true)
+    } finally {
+      // a regression mustn't leave the prototype polluted for later specs
+      delete Object.prototype.polluted
+    }
   })
 })
