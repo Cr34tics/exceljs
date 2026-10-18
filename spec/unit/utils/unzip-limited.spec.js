@@ -276,6 +276,13 @@ describe('unzipLimited', () => {
       calls.push(options)
       return inflateRawSync(data, options)
     }
+    // the output buffers zlib allocates
+    const { allocUnsafe } = Buffer
+    const big = []
+    Buffer.allocUnsafe = (size, ...rest) => {
+      if (size >= MB) big.push(size)
+      return allocUnsafe.call(Buffer, size, ...rest)
+    }
     try {
       // declares 1 MiB of the 2 MiB limit, inflates to 8 MiB: the second
       // pass mustn't take a chunk of its declared size past the limit
@@ -296,10 +303,14 @@ describe('unzipLimited', () => {
         MB + 1,
         2 * MB + 1,
       ])
-      expect(calls[0].chunkSize).to.equal(MB + 1)
+      // one chunk, a byte over the bound: zlib then stops at the first
+      expect(calls[0].chunkSize).to.equal(MB + 2)
       expect(calls[1].chunkSize).to.equal(64 * 1024)
+      // never a second chunk of its declared size
+      expect(big).to.deep.equal([MB + 2])
     } finally {
       zlib.inflateRawSync = inflateRawSync
+      Buffer.allocUnsafe = allocUnsafe
     }
   })
 

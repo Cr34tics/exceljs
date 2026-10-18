@@ -2382,6 +2382,36 @@ describe('zip decompression limits', () => {
       expect(emitted).to.deep.equal(parsed)
     })
 
+    it('detaches from the input and destroys the zip parser once a read() it left settles', async () => {
+      const unzipper = require('unzipper')
+      const { Parse } = unzipper
+      const parsers = []
+      unzipper.Parse = (...args) => {
+        const parser = Parse(...args)
+        parsers.push(parser)
+        return parser
+      }
+      const input = Readable.from([streamedLayout(large)])
+      const events = ['end', 'error', 'close', 'finish']
+      const listeners = () => events.map((name) => input.listenerCount(name))
+      const before = listeners()
+      try {
+        const reader = new ExcelJS.stream.xlsx.WorkbookReader(input, {})
+        let reading
+        for await (const worksheet of reader) {
+          worksheet.on('row', () => {})
+          reading = worksheet.read()
+          break
+        }
+        await reading
+      } finally {
+        unzipper.Parse = Parse
+      }
+      expect(parsers).to.have.length(1)
+      expect(parsers[0].destroyed).to.equal(true)
+      expect(listeners()).to.deep.equal(before)
+    })
+
     it('stops reading a caller-supplied stream when the consumer stops early', async function () {
       this.timeout(10000)
       const wb = new ExcelJS.Workbook()
