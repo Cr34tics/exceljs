@@ -18,6 +18,26 @@ describe('createStreamDecoder', () => {
     }
   })
 
+  it('decodes a character whose continuation byte is 0x80, split anywhere', () => {
+    // an em dash is E2 80 94
+    const dash = Buffer.from('a\u2014b')
+    for (let i = 0; i <= dash.length; i++) {
+      expect(
+        decodeAll([dash.subarray(0, i), dash.subarray(i)]),
+        String(i),
+      ).to.equal('a\u2014b')
+    }
+    // cut off after its 0x80 byte
+    expect(decodeAll([Buffer.from([0x61, 0xe2, 0x80])])).to.equal('a\ufffd')
+  })
+
+  it('decodes ArrayBuffer and DataView chunks', () => {
+    const view = new Uint8Array(Buffer.from('<a>hi</a>'))
+    expect(decodeAll([view.buffer])).to.equal('<a>hi</a>')
+    expect(decodeAll([new DataView(view.buffer, 3, 2)])).to.equal('hi')
+    expect(decodeAll([new ArrayBuffer(0)])).to.equal('')
+  })
+
   it('decodes a character split across three chunks', () => {
     // 你 is bytes 1 to 3
     const chunks = [

@@ -1646,7 +1646,7 @@ export type JSZipGeneratorOptions = ZipGeneratorOptions
 /**
  * Limits that guard against zip decompression bombs when reading an XLSX file.
  * Omit a limit to use the default; pass `null` or `Infinity` to disable it.
- * A limit must be a non-negative integer, `null` or `Infinity`: anything else
+ * A limit must be a non-negative safe integer, `null` or `Infinity`: anything else
  * fails the read with a `TypeError` (the streaming `WorkbookReader`'s
  * constructor throws it).
  * Exceeding one fails the read with an `Error` whose `code` is
@@ -2345,7 +2345,8 @@ export namespace stream {
       )
       /**
        * The options a read() or parse() given none uses. Zip limits set here
-       * apply too, over the constructor's.
+       * apply too, over the constructor's, until a call given options other
+       * than limits replaces these options.
        */
       options: Partial<WorkbookStreamReaderOptions>
       /** What the last read learnt of the workbook (xl/workbook.xml) */
@@ -2372,6 +2373,25 @@ export namespace stream {
         input?: string | import('stream').Stream | null,
         options?: Partial<WorkbookStreamReaderOptions> | null,
       ): AsyncGenerator<any>
+      on(
+        event: 'worksheet',
+        listener: (worksheet: WorksheetReader) => void,
+      ): this
+      on(
+        event: 'hyperlinks',
+        listener: (hyperlinks: HyperlinkReader) => void,
+      ): this
+      on(
+        event: 'shared-strings',
+        listener: (sharedString: { index: number; text: any }) => void,
+      ): this
+      on(
+        event: 'entry',
+        listener: (entry: { type: string; id?: string }) => void,
+      ): this
+      on(event: 'error', listener: (error: Error) => void): this
+      on(event: 'end' | 'finished', listener: () => void): this
+      on(event: string | symbol, listener: (...args: any[]) => void): this
     }
 
     /**

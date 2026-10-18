@@ -2485,7 +2485,7 @@ Reading therefore enforces two limits by default:
 
 `maxEntries` covers every entry in the archive. For `xlsx.load` / `read` / `readFile`, which inflate every entry, so does `maxUncompressedSize`: entries exceljs never reads (media, embeddings, ...) count too.
 `xlsx.load` / `read` / `readFile` add up the uncompressed size each zip entry declares before inflating any of them, then also count what each entry actually inflates to, so an archive that lies about its sizes is rejected too.
-An entry whose declared size is merely wrong is read in full (earlier versions cut it short to that size). One that declares less than it inflates to costs up to about what is left of the limit before the read fails.
+An entry whose declared size is merely wrong is read in full (earlier versions cut it short to that size). One that declares less than it inflates to costs up to about what is left of the limit (and, on Node, a first pass up to its declared size) before the read fails.
 `xlsx.load` reads entries stored uncompressed straight from the buffer you pass it, so don't modify that buffer until `load()` settles (`read` and `readFile` read their own copy).
 `xlsx.read` / `readFile` first buffer the whole (compressed) input, which neither limit bounds: check the size of a stream or file you don't trust before reading it.
 The streaming reader counts the bytes it actually inflates, as they are inflated. Bytes outside its entries (anything between the central directory and its end record, or a CRX header before the archive) are not entries, so neither limit sees them: the zip parser buffers them at a CPU cost that grows quadratically with their size (tens of MiB take seconds to a minute). For an untrusted stream, keep its size cap small, or check that it starts with `PK\x03\x04` before reading it. It doesn't inflate the parts it doesn't read (media, themes, drawings, and parts its options leave out, such as `xl/styles.xml` with `styles: 'ignore'`): it skips their compressed data, so they can't be a bomb, and only their compressed size counts towards `maxUncompressedSize`.
@@ -2525,13 +2525,13 @@ await workbookReader.read()
 ```
 
 Pass a larger number to raise a limit, or `null` / `Infinity` to disable it for trusted input.
-That disables the limits only: `xlsx.load` / `read` / `readFile` still reject some corrupt archives that earlier versions read (a central directory with a bad signature, records that run past the end of the data, or a zip64 extra field too short for the sizes it must hold). Such errors have the `code` `'ERR_INVALID_ZIP'`.
+That disables the limits only: `xlsx.load` / `read` / `readFile` still reject some corrupt archives that earlier versions read (a central directory with a bad signature, records that run past the end of the data, or a zip64 extra field too short for the sizes it must hold). Such errors, and those for deflate data that can't be inflated, have the `code` `'ERR_INVALID_ZIP'` (the inflater's own error is the `cause`).
 
 ```javascript
 await workbook.xlsx.readFile(filename, { maxUncompressedSize: null })
 ```
 
-A limit must be a non-negative integer, `null` or `Infinity`. Anything else (a negative or fractional number, `NaN`, a string such as `'10'`) is a `TypeError`, not a limit error: `xlsx.load` / `read` / `readFile` reject with it, and the streaming `WorkbookReader` constructor throws it.
+A limit must be a non-negative safe integer (up to `Number.MAX_SAFE_INTEGER`), `null` or `Infinity`. Anything else (a negative or fractional number, `NaN`, a string such as `'10'`) is a `TypeError`, not a limit error: `xlsx.load` / `read` / `readFile` reject with it, and the streaming `WorkbookReader` constructor throws it.
 
 #### Writing XLSX[⬆](#contents)<!-- Link generated with jump2header -->
 
@@ -2832,7 +2832,7 @@ An archive that ends inside the comment of its end-of-central-directory record f
 
 Options given to `read()` / `parse()` that set only zip limits (e.g. `{ maxUncompressedSize }`) apply those limits to that call and keep the reader's other options.
 Any other options (`{}` included) replace the reader's options entirely, as before: pass every option you need, as those left out are unset rather than defaulted.
-A limit given to a call applies to that call only; otherwise those set on `reader.options`, then the constructor's, apply.
+A limit given to a call applies to that call only; otherwise those set on `reader.options`, then the constructor's, apply. Only the constructor's limits last: limits set on `reader.options` are replaced, with the rest of the reader's options, by the next call that is given options other than limits.
 An option given to the constructor as `undefined` gets its default (earlier versions left it unset).
 With `hyperlinks: 'emit'`, the workbook reader reads each hyperlinks reader itself before it moves on, so listen for `'hyperlink'` in your `'hyperlinks'` handler or loop body: a later `read()` only waits for that read, and delivers nothing new. It reads them even when nothing listens (e.g. in a `for await` over the worksheets), so a malformed hyperlinks part fails the read: leave `hyperlinks` at `'ignore'` if you don't use them.
 

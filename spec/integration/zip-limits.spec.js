@@ -9,6 +9,7 @@ const {
   withDeclaredSize,
   reorder,
 } = require('../utils/zip-fixtures')
+const { rejectionOf } = require('../utils/tools')
 
 const ExcelJS = verquire('exceljs')
 const { promiseImmediate } = verquire('utils/utils')
@@ -215,13 +216,12 @@ function truncatedIn(buffer, entryName) {
   throw new Error(`entry not found: ${entryName}`)
 }
 
-async function rejectionOf(promise) {
-  try {
-    await promise
-  } catch (error) {
-    return error
-  }
-  return undefined
+// The error load() rejects an archive it can't read with
+function expectInvalidZip(error, cause) {
+  expect(error, 'expected the load to fail').to.be.an.instanceOf(Error)
+  expect(error.code).to.equal('ERR_INVALID_ZIP')
+  expect(error.message).to.match(/not a valid zip archive/)
+  if (cause) expect(error.cause.message).to.equal(cause)
 }
 
 async function expectLimitError(promise, pattern) {
@@ -349,10 +349,16 @@ describe('zip decompression limits', () => {
       for (const data of [Buffer.from('not a zip file'), Buffer.alloc(0)]) {
         // eslint-disable-next-line no-await-in-loop
         const error = await rejectionOf(new ExcelJS.Workbook().xlsx.load(data))
-        expect(error).to.be.an.instanceOf(Error)
-        expect(error.code).to.equal('ERR_INVALID_ZIP')
-        expect(error.message).to.match(/not a valid zip archive/)
+        expectInvalidZip(error)
       }
+    })
+
+    it('rejects an entry whose deflate data is corrupt with ERR_INVALID_ZIP', async () => {
+      const zip = Buffer.from(rezip(small))
+      // the first entry's data: garbage, which can't be inflated
+      const dataStart = 30 + zip.readUInt16LE(26) + zip.readUInt16LE(28)
+      zip.fill(0xff, dataStart, dataStart + 16)
+      expectInvalidZip(await rejectionOf(new ExcelJS.Workbook().xlsx.load(zip)))
     })
 
     it('rejects invalid limits before reading the input', async () => {
@@ -439,10 +445,7 @@ describe('zip decompression limits', () => {
       const error = await rejectionOf(
         new ExcelJS.Workbook().xlsx.load(withZip64Size()),
       )
-      expect(error, 'expected the load to fail').to.be.an.instanceOf(Error)
-      expect(error.cause.message).to.equal('invalid zip data')
-      expect(error.code).to.equal('ERR_INVALID_ZIP')
-      expect(error.message).to.match(/not a valid zip archive/)
+      expectInvalidZip(error, 'invalid zip data')
     })
 
     it('rejects a zip64 size too large to hold exactly', async () => {
@@ -456,10 +459,7 @@ describe('zip decompression limits', () => {
         }),
       ]
       for (const error of await Promise.all(loads.map(rejectionOf))) {
-        expect(error, 'expected the load to fail').to.be.an.instanceOf(Error)
-        expect(error.cause.message).to.equal('invalid zip data')
-        expect(error.code).to.equal('ERR_INVALID_ZIP')
-        expect(error.message).to.match(/not a valid zip archive/)
+        expectInvalidZip(error, 'invalid zip data')
       }
     })
 
@@ -469,10 +469,7 @@ describe('zip decompression limits', () => {
       const error = await rejectionOf(
         new ExcelJS.Workbook().xlsx.load(withZip64Size(0, 4)),
       )
-      expect(error, 'expected the load to fail').to.be.an.instanceOf(Error)
-      expect(error.cause.message).to.equal('invalid zip data')
-      expect(error.code).to.equal('ERR_INVALID_ZIP')
-      expect(error.message).to.match(/not a valid zip archive/)
+      expectInvalidZip(error, 'invalid zip data')
     })
 
     it('ignores a zip64 locator that points at no zip64 end record', async () => {
@@ -1065,6 +1062,20 @@ describe('zip decompression limits', () => {
         )
         expect(error && error.code).to.equal(LIMIT_CODE)
         expect(rows).to.be.above(0)
+        expect(reader.stream.destroyed).to.equal(true)
+      })
+
+      it('once a worksheet read() it did not await settles', async () => {
+        const reader = new ExcelJS.stream.xlsx.WorkbookReader(filename, {})
+        let reading
+        for await (const worksheet of reader) {
+          worksheet.on('row', () => {})
+          reading = worksheet.read()
+          break
+        }
+        // still reading the worksheet the consumer left it reading
+        expect(reader.stream.destroyed).to.equal(false)
+        await reading
         expect(reader.stream.destroyed).to.equal(true)
       })
 
@@ -1796,6 +1807,40 @@ describe('zip decompression limits', () => {
       }
     })
 
+    it('streams a worksheet once xl/styles.xml has been read, with styles cached', async () => {
+      const linked = await hyperlinkWorkbook(1)
+      // the sheet's rels come after the sheet: a streamed sheet is handed
+      // out before them, a buffered one only at the end
+      const buffer = rezip(linked, (files) =>
+        reorder(files, {
+          first: [
+            'xl/_rels/workbook.xml.rels',
+            'xl/workbook.xml',
+            'xl/sharedStrings.xml',
+            'xl/styles.xml',
+            'xl/worksheets/sheet1.xml',
+          ],
+          last: ['xl/worksheets/_rels/sheet1.xml.rels'],
+        }),
+      )
+      const reader = new ExcelJS.stream.xlsx.WorkbookReader(
+        Readable.from([buffer]),
+        { styles: 'cache', entries: 'emit' },
+      )
+      const order = []
+      reader.on('entry', ({ type }) => {
+        if (type === 'hyperlinks') order.push('hyperlinks entry')
+      })
+      for await (const { eventType, value } of reader.parse()) {
+        if (eventType === 'worksheet') {
+          order.push('worksheet')
+
+          for await (const row of value) expect(row).to.be.ok()
+        }
+      }
+      expect(order).to.deep.equal(['worksheet', 'hyperlinks entry'])
+    })
+
     it('waits for xl/styles.xml before streaming a worksheet with styles cached', async () => {
       const date = new Date(Date.UTC(2021, 0, 1))
       const wb = new ExcelJS.Workbook()
@@ -2049,25 +2094,39 @@ describe('zip decompression limits', () => {
     })
 
     it('applies the streaming defaults, or no limits with null or Infinity', async () => {
+      // the limits a read checks its entries against
       const limitsOf = async (options) => {
-        const reader = new ExcelJS.stream.xlsx.WorkbookReader(
-          Readable.from([large]),
-          options,
-        )
+        const { addEntry } = ZipLimits.prototype
+        let checked
+        ZipLimits.prototype.addEntry = function (...args) {
+          checked = this
+          return addEntry.apply(this, args)
+        }
         let rows = 0
-        for await (const worksheet of reader) {
-          // eslint-disable-next-line no-unused-vars
-          for await (const row of worksheet) rows++
+        try {
+          const reader = new ExcelJS.stream.xlsx.WorkbookReader(
+            Readable.from([large]),
+            options,
+          )
+          for await (const worksheet of reader) {
+            // eslint-disable-next-line no-unused-vars
+            for await (const row of worksheet) rows++
+          }
+        } finally {
+          ZipLimits.prototype.addEntry = addEntry
         }
         expect(rows).to.equal(5000)
-        const { maxEntries, maxUncompressedSize } = reader._zipLimits
-        return [maxEntries, maxUncompressedSize]
+        return [checked.maxEntries, checked.maxUncompressedSize]
       }
-      const results = await Promise.all([
-        limitsOf({}),
-        limitsOf({ maxEntries: null, maxUncompressedSize: null }),
-        limitsOf({ maxEntries: Infinity, maxUncompressedSize: Infinity }),
-      ])
+      const results = []
+      for (const options of [
+        {},
+        { maxEntries: null, maxUncompressedSize: null },
+        { maxEntries: Infinity, maxUncompressedSize: Infinity },
+      ]) {
+        // eslint-disable-next-line no-await-in-loop
+        results.push(await limitsOf(options))
+      }
       expect(results).to.deep.equal([
         [10000, 4 * 1024 * MB],
         [Infinity, Infinity],

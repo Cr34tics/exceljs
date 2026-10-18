@@ -211,7 +211,8 @@ describe('unzipLimited', () => {
       )
         .to.throw(Error, /maxUncompressedSize/)
         .with.property('code', ZipLimits.ERROR_CODE)
-      expect(bounds).to.deep.equal([MB + 1])
+      // bounded by its declared size, then by the limit in small chunks
+      expect(bounds).to.deep.equal([100 * 1024 + 1, MB + 1])
     } finally {
       zlib.inflateRawSync = inflateRawSync
     }
@@ -251,6 +252,92 @@ describe('unzipLimited', () => {
       require.cache[file] = cached
       zlib.inflateRawSync = inflateRawSync
     }
+  })
+
+  it('keeps no big buffer for small entries that declare too little', () => {
+    const files = {}
+    for (let i = 0; i < 50; i++) files[`e${i}.bin`] = incompressible(1000)
+    let lying = zipOf(files)
+    for (let i = 0; i < 50; i++) lying = withDeclaredSize(lying, `e${i}.bin`, 1)
+    for (const inflate of Object.values(INFLATERS)) {
+      const out = unzipLimited(lying, limits(), inflate)
+      Object.values(out).forEach((entry) => {
+        expect(entry.length).to.equal(1000)
+        expect(entry.buffer.byteLength).to.be.at.most(2000)
+      })
+    }
+  })
+
+  it('inflates an entry that declares too little in small chunks with zlib', () => {
+    const zlib = require('zlib')
+    const { inflateRawSync } = zlib
+    const calls = []
+    zlib.inflateRawSync = (data, options) => {
+      calls.push(options)
+      return inflateRawSync(data, options)
+    }
+    try {
+      // declares 1 MiB of the 2 MiB limit, inflates to 8 MiB: the second
+      // pass mustn't take a chunk of its declared size past the limit
+      expect(() =>
+        unzipLimited(
+          withDeclaredSize(
+            zipOf({ 'b.bin': new Uint8Array(8 * MB) }),
+            'b.bin',
+            MB,
+          ),
+          limits({ maxUncompressedSize: 2 * MB }),
+          unzipLimited.inflateWithZlib,
+        ),
+      )
+        .to.throw(Error, /maxUncompressedSize/)
+        .with.property('code', ZipLimits.ERROR_CODE)
+      expect(calls.map((c) => c.maxOutputLength)).to.deep.equal([
+        MB + 1,
+        2 * MB + 1,
+      ])
+      expect(calls[0].chunkSize).to.equal(MB + 1)
+      expect(calls[1].chunkSize).to.equal(64 * 1024)
+    } finally {
+      zlib.inflateRawSync = inflateRawSync
+    }
+  })
+
+  it('reads an entry whose declared size is too big to allocate, with no limits', () => {
+    const content = incompressible(200 * 1024)
+    for (const inflate of Object.values(INFLATERS)) {
+      const files = unzipLimited(
+        zip64Of('x.bin', content, 2 ** 46),
+        limits({ maxUncompressedSize: null }),
+        inflate,
+      )
+      expect(Buffer.from(files['x.bin'])).to.deep.equal(Buffer.from(content))
+    }
+  })
+
+  describe('rejects with ERR_INVALID_ZIP', () => {
+    const expectInvalid = (data) =>
+      expect(() => unzipLimited(data, limits()))
+        .to.throw(Error, 'invalid zip data')
+        .with.property('code', 'ERR_INVALID_ZIP')
+    const zip = () => Buffer.from(zipOf({ 'a.txt': strToU8('hello') }))
+    const cdOffset = (data) => data.readUInt32LE(data.length - 22 + 16)
+
+    it('a local header offset past the end of the data', () => {
+      const data = zip()
+      data.writeUInt32LE(0x7fffffff, cdOffset(data) + 42)
+      expectInvalid(data)
+    })
+
+    it('a central directory offset past the end of the data', () => {
+      const data = zip()
+      data.writeUInt32LE(0x7fffffff, data.length - 22 + 16)
+      expectInvalid(data)
+    })
+
+    it('an end record further from the end than its comment can reach', () => {
+      expectInvalid(Buffer.concat([zip(), Buffer.alloc(70 * 1024)]))
+    })
   })
 
   it('returns an entry that over-declares its size in a buffer of its own size', () => {

@@ -58,6 +58,39 @@ describe('parseSax', () => {
     }
   })
 
+  async function parseErrorOfChunks(chunks) {
+    try {
+      for await (const events of parseSax(chunks.map((c) => Buffer.from(c)))) {
+        expect(events).to.be.an('array')
+      }
+    } catch (error) {
+      return error
+    }
+    return undefined
+  }
+
+  it('reads a prolog of any size as empty', async () => {
+    for (const xml of [
+      ' '.repeat(65 * 1024 + 1),
+      `<?xml version="1.0"?><!--${'x'.repeat(100 * 1024)}-->`,
+      `${'<!-- c -->'.repeat(10000)}\n`,
+    ]) {
+      // eslint-disable-next-line no-await-in-loop
+      expect(await parseError(xml), xml.slice(0, 30)).to.equal(undefined)
+    }
+  })
+
+  it('reads a prolog split between chunks anywhere as empty', async () => {
+    const xml = '\ufeff<?xml version="1.0"?> <!-- a - b --> <?pi x?>\n'
+    // one character per chunk splits every item and terminator
+    expect(await parseErrorOfChunks([...xml])).to.equal(undefined)
+    for (const bad of ['<!-- a ->', '<?pi', '<!-', '<', '<!DOCTYPE x>', 'x']) {
+      // eslint-disable-next-line no-await-in-loop
+      const error = await parseErrorOfChunks([...`<?xml version="1.0"?>${bad}`])
+      expect(error, bad).to.be.an.instanceOf(Error)
+    }
+  })
+
   it('stops at the first error rather than report every open element', async () => {
     const { SaxesParser } = require('saxes')
     const { makeError } = SaxesParser.prototype

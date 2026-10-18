@@ -13,12 +13,7 @@ async function* chunks() {
 }
 
 function createReader() {
-  return new HyperlinkReader({
-    workbook: {},
-    id: 1,
-    iterator: chunks(),
-    options: { hyperlinks: 'emit' },
-  })
+  return new HyperlinkReader({ id: 1, iterator: chunks() })
 }
 
 describe('HyperlinkReader', () => {

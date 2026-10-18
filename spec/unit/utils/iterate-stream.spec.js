@@ -1,5 +1,6 @@
 const { PassThrough } = require('stream')
 const { finished } = require('stream/promises')
+const { rejectionOf } = require('../../utils/tools')
 
 const iterateStream = verquire('utils/iterate-stream')
 
@@ -15,15 +16,6 @@ async function collect(stream) {
     chunks.push(chunk.toString())
   }
   return chunks
-}
-
-async function rejectionOf(promise) {
-  try {
-    await promise
-  } catch (error) {
-    return error
-  }
-  return undefined
 }
 
 describe('iterateStream', () => {
