@@ -35,20 +35,27 @@ function withDeclaredSize(buffer, entryName, size) {
 }
 
 // A zip64 archive of one deflated entry whose central directory record keeps
-// both sizes in its zip64 extra field, the uncompressed one being `declared`
-function zip64Of(name, content, declared = content.length) {
+// both sizes in its zip64 extra field, the uncompressed one being `declared`.
+// `extraBefore`: another extra field (id, length, data) to put before it.
+function zip64Of(
+  name,
+  content,
+  declared = content.length,
+  { extraBefore = Buffer.alloc(0) } = {},
+) {
   const zip = zipOf({ [name]: content })
   const cdOffset = zip.readUInt32LE(zip.length - 22 + 16)
   const local = zip.subarray(0, cdOffset)
   const record = Buffer.from(zip.subarray(cdOffset, zip.length - 22))
   const nameLength = record.readUInt16LE(28)
   const compressed = record.readUInt32LE(20)
-  const extra = Buffer.alloc(20)
-  extra.writeUInt16LE(1, 0) // zip64 extra field id
-  extra.writeUInt16LE(16, 2)
+  const field = Buffer.alloc(20)
+  field.writeUInt16LE(1, 0) // zip64 extra field id
+  field.writeUInt16LE(16, 2)
   // the zip64 field's order: uncompressed size, then compressed size
-  extra.writeBigUInt64LE(BigInt(declared), 4)
-  extra.writeBigUInt64LE(BigInt(compressed), 12)
+  field.writeBigUInt64LE(BigInt(declared), 4)
+  field.writeBigUInt64LE(BigInt(compressed), 12)
+  const extra = Buffer.concat([extraBefore, field])
   const head = Buffer.from(record.subarray(0, 46 + nameLength))
   head.writeUInt32LE(0xffffffff, 20)
   head.writeUInt32LE(0xffffffff, 24)

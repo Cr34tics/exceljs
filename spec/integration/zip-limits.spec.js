@@ -1021,6 +1021,21 @@ describe('zip decompression limits', () => {
         { styles: 'cache' },
       )
       expect(date).to.be.an.instanceOf(Date)
+      // an archive without workbook rels leaves none of the previous one's
+      const reader = new ExcelJS.stream.xlsx.WorkbookReader(
+        Readable.from([first]),
+      )
+      for await (const item of reader.parse()) expect(item).to.be.ok()
+      expect(reader.workbookRels).to.be.an('array')
+      const noRels = rezip(beta, (files) => {
+        const rest = { ...files }
+        delete rest['xl/_rels/workbook.xml.rels']
+        return rest
+      })
+      for await (const item of reader.parse(Readable.from([noRels]))) {
+        expect(item).to.be.ok()
+      }
+      expect(reader.workbookRels).to.equal(undefined)
     })
 
     it('takes the first of duplicate relationships and sheets, as before', async () => {

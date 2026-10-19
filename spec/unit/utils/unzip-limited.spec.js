@@ -433,6 +433,40 @@ describe('unzipLimited', () => {
     expect(Math.max(...sizes)).to.be.at.most(MB)
   })
 
+  it('finds the zip64 extra field after another extra field', () => {
+    // e.g. an extended timestamp field (0x5455) of 5 bytes first
+    const timestamp = Buffer.from([0x55, 0x54, 5, 0, 1, 2, 3, 4, 5])
+    const content = strToU8('abc'.repeat(100))
+    for (const inflate of Object.values(INFLATERS)) {
+      const files = unzipLimited(
+        zip64Of('x.bin', content, content.length, { extraBefore: timestamp }),
+        limits(),
+        inflate,
+      )
+      expect(Buffer.from(files['x.bin'])).to.deep.equal(Buffer.from(content))
+    }
+  })
+
+  it('counts small honest entries towards what entries inflate to, with fflate', () => {
+    // the honest one is inflated in one go; with the liar, they inflate to
+    // more than the limit
+    const zip = withDeclaredSize(
+      zipOf({
+        'a.bin': new Uint8Array(600 * 1024),
+        'b.bin': new Uint8Array(600 * 1024),
+      }),
+      'b.bin',
+      0,
+    )
+    expectLimitError(() =>
+      unzipLimited(
+        zip,
+        limits({ maxUncompressedSize: MB }),
+        unzipLimited.inflateWithFflate,
+      ),
+    )
+  })
+
   it('reads an archive with a zip64 end record and ordinary 32-bit records', () => {
     // as written by tools that always add a zip64 end record
     const zip = zipOf({ 'a.txt': strToU8('hello') })
