@@ -165,6 +165,61 @@ async function runTests() {
       report('should read and write xlsx via binary buffer', false, err.message)
     }
 
+    // Test: xlsx.load enforces the zip limits in the bundle, whose inflater is
+    // fflate (zlib is stubbed there), inflating a big entry in chunks
+    try {
+      const result = await page.evaluate(async () => {
+        // an incompressible 200 KiB image (Park-Miller noise)
+        const random = new Uint8Array(200 * 1024)
+        let x = 12345
+        for (let i = 0; i < random.length; i++) {
+          x = (x * 48271) % 2147483647
+          random[i] = x % 256
+        }
+        let binary = ''
+        for (let i = 0; i < random.length; i += 0x8000) {
+          binary += String.fromCharCode.apply(
+            null,
+            random.subarray(i, i + 0x8000),
+          )
+        }
+        const wb = new window.ExcelJS.Workbook()
+        const ws = wb.addWorksheet('blort')
+        ws.getCell('A1').value = 'Hello, World!'
+        const imageId = wb.addImage({ base64: btoa(binary), extension: 'png' })
+        ws.addImage(imageId, 'B2:C3')
+        const buffer = await wb.xlsx.writeBuffer()
+
+        let code
+        try {
+          await new window.ExcelJS.Workbook().xlsx.load(buffer, {
+            maxUncompressedSize: 100 * 1024,
+          })
+        } catch (error) {
+          code = error.code
+        }
+        const wb2 = new window.ExcelJS.Workbook()
+        await wb2.xlsx.load(buffer)
+        return {
+          code,
+          a1: wb2.getWorksheet('blort').getCell('A1').value,
+          media: wb2.model.media.map((m) => m.buffer.length),
+        }
+      })
+      const ok =
+        result.code === 'ERR_ZIP_LIMIT_EXCEEDED' &&
+        result.a1 === 'Hello, World!' &&
+        result.media.length === 1 &&
+        result.media[0] === 200 * 1024
+      report(
+        'xlsx.load should enforce the zip limits',
+        ok,
+        !ok && JSON.stringify(result),
+      )
+    } catch (err) {
+      report('xlsx.load should enforce the zip limits', false, err.message)
+    }
+
     // Test: read and write xlsx via base64 buffer
     try {
       const result = await page.evaluate(async () => {

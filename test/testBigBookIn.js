@@ -9,6 +9,9 @@ const Excel = require('../excel')
 const { Workbook } = Excel
 const { WorkbookReader } = Excel.stream.xlsx
 
+// This stress-tests big, trusted files: lift the zip bomb limits
+const noZipLimits = { maxEntries: null, maxUncompressedSize: null }
+
 if (process.argv[2] === 'help') {
   console.log('Usage:')
   console.log('    node testBigBookIn filename reader plan')
@@ -84,7 +87,7 @@ function report() {
 }
 
 if (useStream) {
-  const wb = new WorkbookReader()
+  const wb = new WorkbookReader(undefined, noZipLimits)
   wb.on('end', () => {
     console.log('reached end of stream')
   })
@@ -125,7 +128,7 @@ if (useStream) {
 } else {
   const wb = new Workbook()
   wb.xlsx
-    .readFile(filename)
+    .readFile(filename, noZipLimits)
     .then(() => {
       const ws = wb.getWorksheet('blort')
       ws.eachRow(checkRow)
