@@ -28,6 +28,23 @@ function expectInvalidZip(fn) {
     .with.property('code', 'ERR_INVALID_ZIP')
 }
 
+// Spies on zlib.inflateRawSync for `fn`, returning the options of each call
+function zlibCallsOf(fn) {
+  const zlib = require('zlib')
+  const { inflateRawSync } = zlib
+  const calls = []
+  zlib.inflateRawSync = (data, options) => {
+    calls.push(options)
+    return inflateRawSync(data, options)
+  }
+  try {
+    fn()
+  } finally {
+    zlib.inflateRawSync = inflateRawSync
+  }
+  return calls
+}
+
 function limits(options = {}) {
   return new ZipLimits(options, ZipLimits.BUFFERED_DEFAULTS)
 }
@@ -192,27 +209,22 @@ describe('unzipLimited', () => {
   })
 
   it('inflates with zlib bounded by the declared size, then by the limit', () => {
-    const zlib = require('zlib')
-    const { inflateRawSync } = zlib
-    const bounds = []
-    zlib.inflateRawSync = (data, options) => {
-      bounds.push(options.maxOutputLength)
-      return inflateRawSync(data, options)
-    }
-    try {
-      // a small entry that declares too little stops at its declared size,
-      // and is inflated again, counted, bounded by what the limit leaves
-      const random = incompressible(5000)
-      const files = unzipLimited(
+    // a small entry that declares too little stops at its declared size,
+    // and is inflated again, counted, bounded by what the limit leaves
+    const random = incompressible(5000)
+    let files
+    const calls = zlibCallsOf(() => {
+      files = unzipLimited(
         withDeclaredSize(zipOf({ 'r.bin': random }), 'r.bin', 1),
         limits({ maxUncompressedSize: 10 * MB }),
         unzipLimited.inflateWithZlib,
       )
-      expect(Buffer.from(files['r.bin'])).to.deep.equal(Buffer.from(random))
-      expect(bounds).to.deep.equal([2, 10 * MB + 1])
+    })
+    expect(Buffer.from(files['r.bin'])).to.deep.equal(Buffer.from(random))
+    expect(calls.map((c) => c.maxOutputLength)).to.deep.equal([2, 10 * MB + 1])
 
-      // a bomb that declares a small size never inflates past the limit
-      bounds.length = 0
+    // a bomb that declares a small size never inflates past the limit
+    const bombCalls = zlibCallsOf(() =>
       expectLimitError(() =>
         unzipLimited(
           withDeclaredSize(
@@ -223,12 +235,13 @@ describe('unzipLimited', () => {
           limits({ maxUncompressedSize: MB }),
           unzipLimited.inflateWithZlib,
         ),
-      )
-      // bounded by its declared size, then by the limit in small chunks
-      expect(bounds).to.deep.equal([100 * 1024 + 1, MB + 1])
-    } finally {
-      zlib.inflateRawSync = inflateRawSync
-    }
+      ),
+    )
+    // bounded by its declared size, then by the limit in small chunks
+    expect(bombCalls.map((c) => c.maxOutputLength)).to.deep.equal([
+      100 * 1024 + 1,
+      MB + 1,
+    ])
   })
 
   it('inflates with fflate, and enforces the limits, in a browser bundle', () => {
@@ -336,23 +349,6 @@ describe('unzipLimited', () => {
       expect(Buffer.from(files['x.bin'])).to.deep.equal(Buffer.from(content))
     }
   })
-
-  // Spies on zlib.inflateRawSync for `fn`, returning the options of each call
-  function zlibCallsOf(fn) {
-    const zlib = require('zlib')
-    const { inflateRawSync } = zlib
-    const calls = []
-    zlib.inflateRawSync = (data, options) => {
-      calls.push(options)
-      return inflateRawSync(data, options)
-    }
-    try {
-      fn()
-    } finally {
-      zlib.inflateRawSync = inflateRawSync
-    }
-    return calls
-  }
 
   it('inflates an entry that declares all the limit leaves it once, with zlib', () => {
     // declares exactly the limit and inflates past it: a second pass would
@@ -465,6 +461,145 @@ describe('unzipLimited', () => {
         unzipLimited.inflateWithFflate,
       ),
     )
+  })
+
+  it('reads a zip64 extra field under a classic end record', () => {
+    // the record's sizes are 0xffffffff, the real ones in its extra field
+    const content = strToU8('abc'.repeat(1000))
+    for (const inflate of Object.values(INFLATERS)) {
+      const files = unzipLimited(
+        zip64Of('x.bin', content, content.length, { classicEnd: true }),
+        limits({ maxUncompressedSize: MB }),
+        inflate,
+      )
+      expect(Buffer.from(files['x.bin'])).to.deep.equal(Buffer.from(content))
+    }
+  })
+
+  it("tells zlib's errors from another realm by their code", () => {
+    // as under Jest, where Node's errors aren't instanceof the realm's
+    const vm = require('vm')
+    const zlib = require('zlib')
+    const { inflateRawSync } = zlib
+    let calls = 0
+    zlib.inflateRawSync = (data, options) => {
+      calls++
+      if (calls === 1) {
+        const error = vm.runInNewContext('new RangeError("too large")')
+        error.code = 'ERR_BUFFER_TOO_LARGE'
+        throw error
+      }
+      return inflateRawSync(data, options)
+    }
+    let files
+    try {
+      // the first pass "fails"; the second reads the entry
+      files = unzipLimited(
+        zipOf({ 'a.bin': strToU8('a'.repeat(5000)) }),
+        limits(),
+        unzipLimited.inflateWithZlib,
+      )
+    } finally {
+      zlib.inflateRawSync = inflateRawSync
+    }
+    expect(Buffer.from(files['a.bin']).toString()).to.equal('a'.repeat(5000))
+    expect(calls).to.equal(2)
+  })
+
+  it('passes a RangeError (e.g. out of memory) through as it is', () => {
+    const outOfMemory = new RangeError('Array buffer allocation failed')
+    expect(() =>
+      unzipLimited(
+        zipOf({ 'a.bin': strToU8('a'.repeat(100)) }),
+        limits(),
+        () => {
+          throw outOfMemory
+        },
+      ),
+    ).to.throw(outOfMemory)
+  })
+
+  it('reinflates a small entry that declares too little in small pushes, with fflate', () => {
+    // 8 KiB of deflate data that inflates to 8 MiB, declaring 10 bytes
+    const zip = withDeclaredSize(
+      zipOf({ 'b.bin': new Uint8Array(8 * MB) }),
+      'b.bin',
+      10,
+    )
+    const { push } = Inflate.prototype
+    const pushed = []
+    Inflate.prototype.push = function (chunk, final) {
+      pushed.push(chunk.length)
+      return push.call(this, chunk, final)
+    }
+    try {
+      expectLimitError(() =>
+        unzipLimited(
+          zip,
+          limits({ maxUncompressedSize: 100 }),
+          unzipLimited.inflateWithFflate,
+        ),
+      )
+    } finally {
+      Inflate.prototype.push = push
+    }
+    // each push inflates at most ~1 MiB before it is counted (no push at
+    // all: inflated whole, in one go)
+    expect(pushed.length).to.be.above(0)
+    expect(Math.max(...pushed)).to.be.at.most(1024)
+  })
+
+  it('keeps entries named like Object members as plain keys', () => {
+    // zipped under stand-in names of the same length (fflate can't zip
+    // '__proto__'), renamed in the central directory
+    const names = {
+      _________: '__proto__',
+      LLLLLL: 'length',
+      CCCCCCCCCCC: 'constructor',
+    }
+    const zip = Buffer.from(
+      zipOf(
+        Object.fromEntries(
+          [...Object.keys(names), 'a.xml'].map((name) => [
+            name,
+            strToU8(name[0]),
+          ]),
+        ),
+      ),
+    )
+    let b = zip.readUInt32LE(zip.length - 22 + 16)
+    while (zip.readUInt32LE(b) === 0x02014b50) {
+      const nameLength = zip.readUInt16LE(b + 28)
+      const name = zip.toString('latin1', b + 46, b + 46 + nameLength)
+      if (names[name]) zip.write(names[name], b + 46, 'latin1')
+      b += 46 + nameLength + zip.readUInt16LE(b + 30) + zip.readUInt16LE(b + 32)
+    }
+    const files = unzipLimited(zip, limits())
+    expect(Object.keys(files).sort()).to.deep.equal(
+      ['__proto__', 'a.xml', 'constructor', 'length'].sort(),
+    )
+    expect(Buffer.from(files.__proto__).toString()).to.equal('_')
+  })
+
+  it('reads an entry name without the UTF-8 flag as latin1', () => {
+    const zip = Buffer.from(zipOf({ 'x.txt': strToU8('hi') }))
+    const cdOffset = zip.readUInt32LE(zip.length - 22 + 16)
+    // é in latin1, the flag (bit 11) clear
+    expect(zip.readUInt16LE(cdOffset + 8) & 0x800).to.equal(0) // eslint-disable-line no-bitwise
+    zip[cdOffset + 46] = 0xe9
+    const files = unzipLimited(zip, limits())
+    expect(Object.keys(files)).to.deep.equal(['é.txt'])
+  })
+
+  it('charges a stored entry its stored size, whatever it declares', () => {
+    // stored, declaring 100 MiB: what it holds is what it costs
+    const zip = withDeclaredSize(
+      zipOf({ 's.bin': [strToU8('stored'), { level: 0 }] }),
+      's.bin',
+      100 * MB,
+    )
+    const files = unzipLimited(zip, limits({ maxUncompressedSize: MB }))
+    expect(Buffer.from(files['s.bin']).toString()).to.equal('stored')
   })
 
   it('reads an archive with a zip64 end record and ordinary 32-bit records', () => {

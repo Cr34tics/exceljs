@@ -388,7 +388,28 @@ describe('zip decompression limits', () => {
       // the first entry's data: garbage, which can't be inflated
       const dataStart = 30 + zip.readUInt16LE(26) + zip.readUInt16LE(28)
       zip.fill(0xff, dataStart, dataStart + 16)
-      expectInvalidZip(await rejectionOf(new ExcelJS.Workbook().xlsx.load(zip)))
+      const error = await rejectionOf(new ExcelJS.Workbook().xlsx.load(zip))
+      expectInvalidZip(error)
+      // the cause is zlib's own error, not an intermediate one
+      expect(error.cause.code).to.equal('Z_DATA_ERROR')
+    })
+
+    it('loads a workbook from a view other than a Uint8Array, in place', async () => {
+      // a DataView over the archive, at an offset into a bigger buffer
+      const padded = Buffer.concat([Buffer.alloc(13), small, Buffer.alloc(7)])
+      for (const view of [
+        new DataView(padded.buffer, padded.byteOffset + 13, small.length),
+        new Uint16Array(
+          // (a copy with its own ArrayBuffer, of an even length)
+          new Uint8Array(Buffer.concat([small, Buffer.alloc(small.length % 2)]))
+            .buffer,
+        ),
+      ]) {
+        const wb = new ExcelJS.Workbook()
+        // eslint-disable-next-line no-await-in-loop
+        await wb.xlsx.load(view)
+        expect(wb.getWorksheet('sheet').getCell('A1').value).to.equal('row 1')
+      }
     })
 
     it('rejects a corrupt archive of any supported type, from any realm, with ERR_INVALID_ZIP', async () => {
@@ -1107,6 +1128,151 @@ describe('zip decompression limits', () => {
       expect(rows).to.equal(1)
     })
 
+    describe('holding back a file input of 64 KiB chunks', () => {
+      let dir
+      let filename
+      before(async function () {
+        this.timeout(30000)
+        const wb = new ExcelJS.Workbook()
+        const ws = wb.addWorksheet('sheet')
+        for (let i = 1; i <= 50; i++) ws.addRow([i, 'row'])
+        // the sheet streams, then 6000 tiny entries follow it
+        const buffer = rezip(
+          streamedLayout(Buffer.from(await wb.xlsx.writeBuffer())),
+          (files) => {
+            const padded = { ...files }
+            for (let i = 0; i < 6000; i++) {
+              padded[`xl/media/pad${i}`] = [strToU8('x'), { level: 0 }]
+            }
+            return padded
+          },
+        )
+        dir = fs.mkdtempSync(path.join(os.tmpdir(), 'exceljs-zip-limits-'))
+        filename = path.join(dir, 'padded.xlsx')
+        fs.writeFileSync(filename, buffer)
+      })
+      after(() => {
+        if (dir) removeDir(dir)
+      })
+
+      it('parses no more than about a chunk ahead of a stalled consumer', async () => {
+        const unzipper = require('unzipper')
+        const { Parse } = unzipper
+        let entries = 0
+        unzipper.Parse = (...args) => {
+          const parser = Parse(...args)
+          parser.on('entry', () => entries++)
+          return parser
+        }
+        let parsedAhead
+        try {
+          const reader = new ExcelJS.stream.xlsx.WorkbookReader(filename, {})
+          for await (const worksheet of reader) {
+            // eslint-disable-next-line no-unused-vars
+            for await (const row of worksheet) {
+              // read the rows
+            }
+            // stalled: the reader must not parse on through the file
+            await new Promise((resolve) => setTimeout(resolve, 300))
+            parsedAhead = entries
+            break
+          }
+        } finally {
+          unzipper.Parse = Parse
+        }
+        // one 64 KiB chunk holds about 1250 of these entries; unheld, the
+        // reader parses all 6000
+        expect(parsedAhead).to.be.below(2500)
+      })
+
+      it('lets an input that feeds another stream flow on after an early stop', async () => {
+        const input = fs.createReadStream(filename)
+        const other = new PassThrough()
+        let received = 0
+        other.on('data', (chunk) => {
+          received += chunk.length
+        })
+        const ended = new Promise((resolve) => other.on('end', resolve))
+        input.pipe(other)
+        const reader = new ExcelJS.stream.xlsx.WorkbookReader(input, {})
+        for await (const worksheet of reader) {
+          // eslint-disable-next-line no-unused-vars
+          for await (const row of worksheet) {
+            // read the rows
+          }
+          // held back by now: a stop must let the input go
+          await new Promise((resolve) => setTimeout(resolve, 300))
+          break
+        }
+        await withinTime(ended, 'the other stream', 5000)
+        expect(received).to.equal(fs.statSync(filename).size)
+      })
+    })
+
+    it('keeps the reader options for limits given with options set to undefined', async () => {
+      const reader = new ExcelJS.stream.xlsx.WorkbookReader(
+        Readable.from([small]),
+      )
+      let rows = 0
+      for await (const { eventType, value } of reader.parse(undefined, {
+        maxUncompressedSize: 10 * MB,
+        styles: undefined,
+      })) {
+        if (eventType === 'worksheet') {
+          // eslint-disable-next-line no-unused-vars
+          for await (const row of value) rows++
+        }
+      }
+      expect(rows).to.equal(1)
+      expect(reader.options.worksheets).to.equal('emit')
+    })
+
+    it('applies a non-enumerable own limit, as load() does', async () => {
+      const options = {}
+      Object.defineProperty(options, 'maxUncompressedSize', { value: 5 })
+      await expectLimitError(
+        streamRead(Readable.from([small]), options),
+        /maxUncompressedSize/,
+      )
+    })
+
+    it('goes on after a worksheet read() the consumer caught', async () => {
+      // read() of a worksheet already iterated rejects; the consumer's catch
+      // is the end of it
+      const names = []
+      for await (const worksheet of new ExcelJS.stream.xlsx.WorkbookReader(
+        Readable.from([streamedLayout(small)]),
+      )) {
+        // eslint-disable-next-line no-unused-vars
+        for await (const row of worksheet) {
+          // read the rows
+        }
+        const error = await rejectionOf(worksheet.read())
+        expect(error && error.message).to.match(/already read/)
+        names.push(worksheet.name)
+      }
+      expect(names).to.deep.equal(['sheet'])
+    })
+
+    it('keeps to the parts it set out to read when reader.options change mid-read', async () => {
+      // xl/styles.xml after the sheet, which it skips, as styles are ignored
+      const buffer = rezip(small, (files) =>
+        reorder(streamedLayoutFiles(files), { last: ['xl/styles.xml'] }),
+      )
+      const reader = new ExcelJS.stream.xlsx.WorkbookReader(
+        Readable.from([buffer]),
+      )
+      let rows = 0
+      for await (const worksheet of reader) {
+        // long enough for unzipper to have parsed the styles ahead
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        reader.options.styles = 'cache'
+        // eslint-disable-next-line no-unused-vars
+        for await (const row of worksheet) rows++
+      }
+      expect(rows).to.equal(1)
+    })
+
     it('reads normally within the limits', async () => {
       const rows = await streamRead(Readable.from([large]), {
         maxEntries: 100,
@@ -1293,15 +1459,37 @@ describe('zip decompression limits', () => {
       it('once a worksheet read() it did not await settles', async () => {
         const reader = new ExcelJS.stream.xlsx.WorkbookReader(filename, {})
         let reading
+        let left
         for await (const worksheet of reader) {
           worksheet.on('row', () => {})
           reading = worksheet.read()
+          left = worksheet
           break
         }
         // still reading the worksheet the consumer left it reading
         expect(reader.stream.destroyed).to.equal(false)
         await reading
         expect(reader.stream.destroyed).to.equal(true)
+        // a worksheet the consumer keeps doesn't keep the stopped read alive
+        expect(left._afterRead).to.equal(undefined)
+      })
+
+      it('even when the file fails to close', async () => {
+        const { close } = fs
+        fs.close = (fd, callback) =>
+          close(fd, () =>
+            callback(Object.assign(new Error('EIO'), { code: 'EIO' })),
+          )
+        try {
+          const reader = new ExcelJS.stream.xlsx.WorkbookReader(filename, {})
+          for await (const worksheet of reader) {
+            expect(worksheet).to.be.ok()
+            break
+          }
+          expect(reader.stream.destroyed).to.equal(true)
+        } finally {
+          fs.close = close
+        }
       })
 
       it('when the consumer stops early', async () => {
@@ -1561,42 +1749,61 @@ describe('zip decompression limits', () => {
       )
       let rows = 0
       const attempts = []
+      // what `attempt` throws, at once or by rejecting
+      const errorOf = (attempt) => {
+        try {
+          return rejectionOf(attempt())
+        } catch (error) {
+          return Promise.resolve(error)
+        }
+      }
       reader.on('worksheet', (worksheet) => {
         worksheet.on('row', () => rows++)
-        const iterator = worksheet[Symbol.asyncIterator]()
         attempts.push(
           // iterating it, peeking at it (and dropping the iterator), its
           // parse(), and iterating it after an await
-          rejectionOf(
-            (async () => {
-              // eslint-disable-next-line no-unused-vars
-              for await (const row of worksheet) {
-                // read the rows
-              }
-            })(),
-          ),
-          rejectionOf(iterator.next()),
-          rejectionOf(worksheet.parse().next()),
-          rejectionOf(
-            (async () => {
-              await null
-              // eslint-disable-next-line no-unused-vars
-              for await (const row of worksheet) {
-                // read the rows
-              }
-            })(),
-          ),
+          errorOf(async () => {
+            // eslint-disable-next-line no-unused-vars
+            for await (const row of worksheet) {
+              // read the rows
+            }
+          }),
+          errorOf(() => worksheet[Symbol.asyncIterator]().next()),
+          errorOf(() => worksheet.parse().next()),
+          errorOf(async () => {
+            await null
+            // eslint-disable-next-line no-unused-vars
+            for await (const row of worksheet) {
+              // read the rows
+            }
+          }),
         )
       })
-      // none of them can stall the read
-      expect(await withinTime(settle(reader), 'the read')).to.equal(undefined)
+      // none of them can stall the read, which reads the worksheet, then
+      // fails with the same error, so it is reported on the reader too
+      const error = await withinTime(settle(reader), 'the read')
+      expect(error && error.message).to.match(/listen for its 'row' events/)
       expect(rows).to.equal(5000)
       const errors = await Promise.all(attempts)
       expect(errors).to.have.length(4)
-      errors.forEach((error) => {
-        expect(error).to.be.an.instanceOf(Error)
-        expect(error.message).to.match(/listen for its 'row' events/)
+      errors.forEach((e) => {
+        expect(e).to.be.an.instanceOf(Error)
+        expect(e.message).to.match(/listen for its 'row' events/)
       })
+      // and calling parse() throws at once, not at its first next()
+      const another = new ExcelJS.stream.xlsx.WorkbookReader(
+        Readable.from([large]),
+      )
+      let thrown
+      another.on('worksheet', (worksheet) => {
+        try {
+          worksheet.parse()
+        } catch (e) {
+          thrown = e
+        }
+      })
+      await settle(another)
+      expect(thrown && thrown.message).to.match(/listen for its 'row' events/)
     })
 
     it('streams a worksheet only after xl/workbook.xml', async () => {

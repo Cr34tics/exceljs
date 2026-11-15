@@ -37,11 +37,13 @@ function withDeclaredSize(buffer, entryName, size) {
 // A zip64 archive of one deflated entry whose central directory record keeps
 // both sizes in its zip64 extra field, the uncompressed one being `declared`.
 // `extraBefore`: another extra field (id, length, data) to put before it.
+// `classicEnd`: end with a classic end record only, no zip64 one (as
+// Python's zipfile writes with force_zip64 for an archive this small).
 function zip64Of(
   name,
   content,
   declared = content.length,
-  { extraBefore = Buffer.alloc(0) } = {},
+  { extraBefore = Buffer.alloc(0), classicEnd = false } = {},
 ) {
   const zip = zipOf({ [name]: content })
   const cdOffset = zip.readUInt32LE(zip.length - 22 + 16)
@@ -81,6 +83,13 @@ function zip64Of(
   end.writeUInt16LE(0xffff, 10)
   end.writeUInt32LE(0xffffffff, 12)
   end.writeUInt32LE(0xffffffff, 16)
+  if (classicEnd) {
+    end.writeUInt16LE(1, 8)
+    end.writeUInt16LE(1, 10)
+    end.writeUInt32LE(central.length, 12)
+    end.writeUInt32LE(local.length, 16)
+    return Buffer.concat([local, central, end])
+  }
   return Buffer.concat([local, central, zip64End, locator, end])
 }
 
