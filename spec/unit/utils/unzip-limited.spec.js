@@ -585,7 +585,7 @@ describe('unzipLimited', () => {
     const zip = Buffer.from(zipOf({ 'x.txt': strToU8('hi') }))
     const cdOffset = zip.readUInt32LE(zip.length - 22 + 16)
     // é in latin1, the flag (bit 11) clear
-    expect(zip.readUInt16LE(cdOffset + 8) & 0x800).to.equal(0) // eslint-disable-line no-bitwise
+    expect(Math.floor(zip.readUInt16LE(cdOffset + 8) / 0x800) % 2).to.equal(0)
     zip[cdOffset + 46] = 0xe9
     const files = unzipLimited(zip, limits())
     expect(Object.keys(files)).to.deep.equal(['é.txt'])
@@ -697,7 +697,7 @@ describe('unzipLimited', () => {
     }
   })
 
-  it('fails, rather than cuts short, a deflate stream with a long run of empty blocks', () => {
+  it('reads a deflate stream with a long run of empty blocks', () => {
     // 'AAAA', 45,000 empty stored blocks (225 KB of input that inflate to
     // nothing), then 'BBBB'
     const block = (final, data) =>
@@ -717,10 +717,25 @@ describe('unzipLimited', () => {
         unzipLimited(zip, limits(), unzipLimited.inflateWithZlib)['p.bin'],
       ).toString(),
     ).to.equal('AAAABBBB')
-    // fflate's pushes see no output for 128 KiB: it can't tell the data
-    // hasn't ended, and fails the entry
+    // fflate's pushes see no output for 128 KiB: as it tells the end of the
+    // data by its state, it reads on
+    expect(
+      Buffer.from(
+        unzipLimited(zip, limits(), unzipLimited.inflateWithFflate)['p.bin'],
+      ).toString(),
+    ).to.equal('AAAABBBB')
+    // Should fflate's state ever change, the idle bound stops the pushes:
+    // the entry then fails rather than is cut short
     expectInvalidZip(() =>
-      unzipLimited(zip, limits(), unzipLimited.inflateWithFflate),
+      unzipLimited(zip, limits(), (compressed, entry, inflated) =>
+        unzipLimited.inflateInPushes(
+          compressed,
+          entry,
+          inflated,
+          64 * 1024,
+          false,
+        ),
+      ),
     )
   })
 

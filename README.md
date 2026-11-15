@@ -2517,6 +2517,8 @@ const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader(stream, {
   maxUncompressedSize: 100 * 1024 * 1024,
 })
 workbookReader.on('error', (error) => {
+  // a stream you pass in stays yours: close it once the read has stopped
+  stream.destroy()
   if (error.code === 'ERR_ZIP_LIMIT_EXCEEDED') {
     // reject the upload
   }
@@ -2525,7 +2527,7 @@ await workbookReader.read()
 ```
 
 Pass a larger number to raise a limit, or `null` / `Infinity` to disable it for trusted input.
-That disables the limits only: `xlsx.load` / `read` / `readFile` still reject some corrupt archives that earlier versions read (a central directory with a bad signature, records that run past the end of the data, or a zip64 extra field too short for the sizes it must hold). Such errors, and those for deflate data that can't be inflated, have the `code` `'ERR_INVALID_ZIP'` and the message "Can't read the loaded zip file: it is not a valid zip archive" (for deflate data, the inflater's own error is the `cause`). Earlier versions failed them with "Can't read the data of 'the loaded zip file'. Is it in a supported JavaScript type ...", which is now kept for input of an unsupported type: match on the `code`, not the message. An entry in a compression method that can't be read (e.g. Deflate64) fails with `'ERR_UNSUPPORTED_ZIP_COMPRESSION'` instead.
+That disables the limits only: `xlsx.load` / `read` / `readFile` still reject some corrupt archives that earlier versions read (a central directory with a bad signature, records that run past the end of the data, or a zip64 extra field too short for the sizes it must hold). Such errors, and those for deflate data that can't be inflated, have the `code` `'ERR_INVALID_ZIP'` and the message "Can't read the loaded zip file: it is not a valid zip archive" (for deflate data, the inflater's own error is the `cause`). Earlier versions failed them with "Can't read the data of 'the loaded zip file'. Is it in a supported JavaScript type ...", which is now kept for input of an unsupported type: match on the `code`, not the message. An entry in a compression method that can't be read (e.g. Deflate64) fails with `'ERR_UNSUPPORTED_ZIP_COMPRESSION'` instead. (In the browser bundle, which inflates with fflate rather than Node's zlib, a few corruptions zlib rejects go unnoticed, such as a stored block whose length check is wrong: such an entry reads with whatever data it holds.)
 
 ```javascript
 await workbook.xlsx.readFile(filename, { maxUncompressedSize: null })
@@ -2799,15 +2801,15 @@ await workbook.commit()
 
 The streaming XLSX workbook reader is available in the ExcelJS.stream.xlsx namespace.
 
-The constructor takes a required input argument and an optional options argument:
+The constructor takes an input argument (or give it to `read()` / `parse()` instead) and an optional options argument:
 
 | Argument                    | Description                                                                                                                                                                                                                                                                             |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| input (required)            | Specifies the name of the file or the readable stream from which to read the XLSX workbook.                                                                                                                                                                                             |
+| input (optional)            | Specifies the name of the file or the readable stream from which to read the XLSX workbook. If left out, pass it to `read()` or `parse()`.                                                                                                                                              |
 | options (optional)          | Specifies how to handle the event types occuring during the read parsing.                                                                                                                                                                                                               |
 | options.entries             | Specifies whether to emit entries (`'emit'`) or not (`'ignore'`). Default is `'ignore'`.                                                                                                                                                                                                |
 | options.sharedStrings       | Specifies whether to cache shared strings (`'cache'`), which inserts them into the respective cell values, or whether to emit them (`'emit'`) or ignore them (`'ignore'`), in both of which case the cell value will be a reference to the shared string's index. Default is `'cache'`. |
-| options.hyperlinks          | Specifies whether to cache hyperlinks (`'cache'`), which inserts them into their respective cells, whether to emit them (`'emit'`) or whether to ignore them (`'ignore'`). Default is `'ignore'`.                                                                                       |
+| options.hyperlinks          | Specifies whether to emit hyperlinks (`'emit'`) or whether to ignore them (`'ignore'`). `'cache'` is accepted but reads as `'ignore'`: it doesn't insert hyperlinks into cells (nor did it in earlier versions). Default is `'ignore'`.                                                 |
 | options.styles              | Specifies whether to cache styles (`'cache'`), which inserts them into their respective rows and cells, or whether to ignore them (`'ignore'`). Default is `'ignore'`.                                                                                                                  |
 | options.worksheets          | Specifies whether to emit worksheets (`'emit'`) or not (`'ignore'`). Default is `'emit'`.                                                                                                                                                                                               |
 | options.maxEntries          | Maximum number of entries in the zip archive. Default is `10000`. Use `null` or `Infinity` to disable. See [Zip bomb limits](#zip-bomb-limits).                                                                                                                                         |

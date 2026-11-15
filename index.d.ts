@@ -2324,6 +2324,7 @@ export namespace stream {
        */
       sharedStrings?: 'cache' | 'emit' | 'ignore'
       /**
+       * 'cache' reads as 'ignore': it doesn't insert hyperlinks into cells.
        * @default 'ignore'
        */
       hyperlinks?: 'cache' | 'emit' | 'ignore'
@@ -2356,7 +2357,15 @@ export namespace stream {
        */
       options: Partial<WorkbookStreamReaderOptions>
       /** What the last read learnt of the workbook (xl/workbook.xml) */
-      model: Partial<WorkbookModel>
+      model: Partial<Omit<WorkbookModel, 'sheets'>> & {
+        /** The sheets xl/workbook.xml lists (not their contents) */
+        sheets?: Array<{
+          id: number
+          name: string
+          rId: string
+          state?: WorksheetState
+        }>
+      }
       /**
        * The workbook properties (workbookPr) of the last read, under `model`
        * (also at `model.properties` of the reader)
