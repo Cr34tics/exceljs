@@ -455,8 +455,13 @@ describe('zip decompression limits', () => {
       }
       await wb.xlsx.read(Readable.from([stored]))
       expect(wb.getWorksheet('sheet').getCell('A1').value).to.equal('row 1')
-      // what load() reads is a copy, not the caller's chunk
-      expect(loaded.buffer).to.not.equal(stored.buffer)
+      // what load() reads is a copy, not the caller's chunk: small buffers
+      // can share Node's allocation pool, so compare the memory they span
+      const overlaps =
+        loaded.buffer === stored.buffer &&
+        loaded.byteOffset < stored.byteOffset + stored.length &&
+        stored.byteOffset < loaded.byteOffset + loaded.length
+      expect(overlaps).to.equal(false)
     })
 
     it('reads a file too big to read whole through a stream', async () => {
