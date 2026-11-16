@@ -30,4 +30,14 @@ const tools = {
   },
 }
 
+// Resolves with the error `promise` rejects with, or undefined
+tools.rejectionOf = async function rejectionOf(promise) {
+  try {
+    await promise
+  } catch (error) {
+    return error
+  }
+  return undefined
+}
+
 module.exports = tools
